@@ -115,14 +115,25 @@ export async function buildApp(
     logController: new LogController({ disableRequestLogging: true }),
   });
 
-  await app.register(helmet);
+     await app.register(helmet);
   await app.register(cors, {
-    origin: env.APP_ORIGIN,
+    origin: (origin, cb) => {
+      // Allow localhost, 127.0.0.1, Vercel frontend, and configured origin
+      if (
+        !origin ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1') ||
+        origin.includes('vercel.app') ||
+        origin === env.APP_ORIGIN
+      ) {
+        return cb(null, true);
+      }
+      cb(new Error('Not allowed by CORS'), false);
+    },
     credentials: false,
     methods: ['GET', 'POST'],
   });
   await app.register(rateLimit, { max: 60, timeWindow: '1 minute' });
-
   app.addHook('onSend', async (_req, reply) => {
     reply.header('Cache-Control', 'no-store');
   });

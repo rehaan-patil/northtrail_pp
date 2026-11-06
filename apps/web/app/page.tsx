@@ -33,11 +33,20 @@ import {
 type Scenario = Awaited<ReturnType<ReturnType<typeof createNorthtrail>['scenario']>>;
 
 const api = () => {
-  const configured = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_NORTHTRAIL_API_URL;
-  const local =
-    typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
-  if (!configured && !local) throw new Error('API is not configured for this preview.');
-  return createNorthtrail({ baseUrl: configured || 'http://localhost:4000' });
+  const configured =
+    typeof process !== 'undefined'
+      ? process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_NORTHTRAIL_API_URL
+      : undefined;
+
+  const isVercel =
+    typeof window !== 'undefined' && window.location.hostname.includes('vercel.app');
+
+  // Automatically connects to your live Railway API on Vercel, or localhost locally
+  const defaultUrl = isVercel
+    ? 'https://northtrailpp-production.up.railway.app'
+    : 'http://localhost:4000';
+
+  return createNorthtrail({ baseUrl: configured || defaultUrl });
 };
 
 export default function ReviewPage() {

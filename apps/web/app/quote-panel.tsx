@@ -37,7 +37,7 @@ export function QuotePanel({
   client: () => ReturnType<typeof createNorthtrail>;
   onRecord: (record: DecisionRecord) => void;
 }) {
-  const [wallet, setWallet] = useState('');
+    const [wallet, setWallet] = useState('0x1111111111111111111111111111111111111111');
   const [amount, setAmount] = useState('1000');
   const [chainId, setChainId] = useState<number | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
