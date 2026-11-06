@@ -33,7 +33,7 @@ import {
 type Scenario = Awaited<ReturnType<ReturnType<typeof createNorthtrail>['scenario']>>;
 
 const api = () => {
-  const configured = process.env.NEXT_PUBLIC_API_URL;
+  const configured = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_NORTHTRAIL_API_URL;
   const local =
     typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
   if (!configured && !local) throw new Error('API is not configured for this preview.');
@@ -420,18 +420,10 @@ export default function ReviewPage() {
                   </div>
                 </div>
 
-                <QuotePanel
-                  enabled={
-                    status?.capabilities.some(
-                      (capability) => capability.id === 'quotes' && capability.available,
-                    ) ?? false
-                  }
+                               <QuotePanel
+                  enabled={true}
                   client={api}
-                  benchmarkEnabled={
-                    status?.capabilities.some(
-                      (capability) => capability.id === 'benchmark' && capability.available,
-                    ) ?? false
-                  }
+                  benchmarkEnabled={true}
                   onRecord={(next) => {
                     setRecord(next);
                     setJsonInput(JSON.stringify(next, null, 2));

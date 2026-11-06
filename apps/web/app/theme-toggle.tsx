@@ -77,9 +77,9 @@ export default function ThemeToggle() {
       type="button"
       className="theme-toggle"
       onClick={toggleTheme}
-      aria-label={Switch to ${theme === 'dark' ? 'light' : 'dark'} mode}
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       aria-pressed={theme === 'dark'}
-      title={Switch to ${theme === 'dark' ? 'light' : 'dark'} mode}
+      title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
     >
       {theme === 'dark' ? (
         <Sun aria-hidden="true" />
