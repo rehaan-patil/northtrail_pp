@@ -119,3 +119,29 @@ describe('Curve Atlas exact arithmetic research foundation', () => {
     ).toThrow();
   });
 });
+  it('retains previous winner when challenger lead is within switchBufferBps', () => {
+    const incumbent = sample('incumbent', { outputRaw: '100000000000000000000' });
+    const challenger = sample('challenger', { outputRaw: '100010000000000000000' }); // ~1 bps higher
+
+    const result = compareRouteCosts(
+      { ...context(), previousWinnerId: 'incumbent', switchBufferBps: 2 },
+      [incumbent, challenger],
+    );
+
+    expect(result.strategy.previousWinnerRetained).toBe(true);
+    expect(result.strategy.recommendedId).toBe('incumbent');
+  });
+
+  it('calculates active momentum signal when sufficient history is provided', () => {
+    const history = [
+      { observedAtMs: 8000, netOutputRaw: '1000', benchmarkNetOutputRaw: '1000' },
+      { observedAtMs: 8500, netOutputRaw: '1010', benchmarkNetOutputRaw: '1000' },
+      { observedAtMs: 8900, netOutputRaw: '1020', benchmarkNetOutputRaw: '1000' },
+    ];
+
+    const sampleWithHistory = sample('momentum-pool', { history });
+    const result = compareRouteCosts(context(), [sampleWithHistory]);
+
+    expect(result.strategy.candidates[0]?.signalStatus).toBe('ACTIVE');
+    expect(result.strategy.candidates[0]?.historyPoints).toBe(3);
+  });
