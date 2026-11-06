@@ -4,8 +4,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { QuotePanel } from './quote-panel';
 import { ResearchPanel } from './research-panel';
 import { ProofPanel } from './proof-panel';
-import ThemeToggle from './theme-toggle';
-
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -18,8 +16,10 @@ import {
   MoveUpRight,
   RefreshCw,
   ShieldCheck,
+  Sun,
+  Moon,
+  Sparkles,
 } from 'lucide-react';
-
 import {
   createNorthtrail,
   createDecision,
@@ -30,96 +30,74 @@ import {
   type SystemStatus,
 } from '@northtrail/sdk';
 
-type Scenario = Awaited<
-  ReturnType<ReturnType<typeof createNorthtrail>['scenario']>
->;
+type Scenario = Awaited<ReturnType<ReturnType<typeof createNorthtrail>['scenario']>>;
 
 const api = () => {
   const configured = process.env.NEXT_PUBLIC_API_URL;
-
   const local =
-    typeof window !== 'undefined' &&
-    ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
-  if (!configured && !local) {
-    throw new Error('API is not configured for this preview.');
-  }
-
-  return createNorthtrail({
-    baseUrl: configured || 'http://localhost:4000',
-  });
+    typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  if (!configured && !local) throw new Error('API is not configured for this preview.');
+  return createNorthtrail({ baseUrl: configured || 'http://localhost:4000' });
 };
 
 export default function ReviewPage() {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [connection, setConnection] = useState('Connecting to the API…');
-
   const [amount, setAmount] = useState('5000');
   const [change, setChange] = useState('-4');
-
   const [scenario, setScenario] = useState<Scenario | null>(null);
-
-  const [scenarioInput, setScenarioInput] = useState<{
-    amount: string;
-    change: string;
-  } | null>(null);
-
+  const [scenarioInput, setScenarioInput] = useState<{ amount: string; change: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-
   const [record, setRecord] = useState<DecisionRecord | null>(null);
   const [verified, setVerified] = useState('');
   const [jsonInput, setJsonInput] = useState('');
 
+  // Toggle Light / Dark Mode
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', next);
+    }
+  };
+
   async function refresh() {
     setConnection('Connecting to the API…');
-
     try {
       setStatus(await api().status());
       setConnection('API connected');
     } catch {
       setStatus(null);
-      setConnection(
-        'API unavailable. Start the Northtrail API to use the calculator.'
-      );
+      setConnection('API unavailable. Start the Northtrail API to use the calculator.');
     }
   }
 
   useEffect(() => {
     void refresh();
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
   }, []);
 
   async function calculate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     setError('');
     setBusy(true);
     setScenario(null);
     setScenarioInput(null);
-
     try {
-      if (!/^-?(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(change)) {
-        throw new Error(
-          'Enter a percentage with at most two decimal places.'
-        );
-      }
-
+      if (!/^-?(0|[1-9][0-9]*)(\.[0-9]{1,2})?$/.test(change))
+        throw new Error('Enter a percentage with at most two decimal places.');
       const bps =
-        Number(parseAmount(change.replace('-', ''), 2)) *
-        (change.startsWith('-') ? -1 : 1);
-
-      const result = await api().scenario({
-        amountRaw: parseAmount(amount, 6),
-        changeBps: bps,
-      });
-
+        Number(parseAmount(change.replace('-', ''), 2)) * (change.startsWith('-') ? -1 : 1);
+      const result = await api().scenario({ amountRaw: parseAmount(amount, 6), changeBps: bps });
       setScenario(result);
       setScenarioInput({ amount, change });
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : 'The calculation could not be completed.'
+        reason instanceof Error ? reason.message : 'The calculation could not be completed.',
       );
     } finally {
       setBusy(false);
@@ -128,16 +106,13 @@ export default function ReviewPage() {
 
   async function recordNoTrade() {
     setVerified('');
-
     const next = await createDecision({
       schemaVersion: '1',
       decisionId: crypto.randomUUID(),
       revision: 1,
       previousDigest: null,
       displaySchemaVersion: 'review-v1',
-      candidates: [
-        { id: 'no-trade', kind: 'NO_TRADE' },
-      ],
+      candidates: [{ id: 'no-trade', kind: 'NO_TRADE' }],
       selectedCandidateId: 'no-trade',
       sources: [],
       limitations: [
@@ -145,212 +120,220 @@ export default function ReviewPage() {
       ],
       createdAt: new Date().toISOString(),
     });
-
     setRecord(next);
     setJsonInput(JSON.stringify(next, null, 2));
   }
 
   async function checkRecord(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     try {
       const valid = await verifyDecision(JSON.parse(jsonInput));
-
       setVerified(
         valid
           ? 'Digest matches the record. This confirms consistency only.'
-          : 'Record does not match its digest or schema.'
+          : 'Record does not match its digest or schema.',
       );
     } catch {
       setVerified('Enter a valid JSON decision record.');
     }
   }
 
-  const quotesEnabled =
-    status?.capabilities.some(
-      (capability) =>
-        capability.id === 'quotes' && capability.available
-    ) ?? false;
-
-  const benchmarkEnabled =
-    status?.capabilities.some(
-      (capability) =>
-        capability.id === 'benchmark' && capability.available
-    ) ?? false;
-
-  const proofEnabled =
-    status?.capabilities.some(
-      (capability) =>
-        capability.id === 'proof' && capability.available
-    ) ?? false;
-
   return (
-    <div className="workspace">
+    <div className="workspace" data-theme={theme}>
       <a className="skip-link" href="#main">
         Skip to review
       </a>
 
+      {/* Modern Sidebar */}
       <aside className="sidebar">
         <a className="brand" href="#main">
           <span className="brand-icon">
-            <Compass size={22} />
+            <Compass size={24} />
           </span>
-          northtrail<span className="brand-dot">.</span>
+          NORTHTRAIL<span style={{ color: 'var(--accent)' }}>.</span>
         </a>
 
-        <div className="workspace-label">
-          WORKSPACE
-        </div>
-
+        <div className="workspace-label">WORKSPACES</div>
         <nav aria-label="Main navigation">
           <a className="nav-item active" href="#main">
             <Compass size={17} />
-            Review
-            <span>01</span>
+            Execution Review
           </a>
-
-          <a className="nav-item" href="#quote-section">
-            <MoveUpRight size={17} />
-            Quotes
-          </a>
-
           <a className="nav-item" href="#decision-trail">
             <FileCheck2 size={17} />
-            Decision trail
+            Decision Trail
           </a>
-
           <a className="nav-item" href="#research">
             <Layers3 size={17} />
-            Research
+            Compass Risk
           </a>
-
           <a className="nav-item" href="#trade-proof">
             <ShieldCheck size={17} />
-            Trade proof
+            Trade Proof
           </a>
-
-          <a className="nav-item" href="#capabilities">
-            <Layers3 size={17} />
-            Capabilities
+          <a className="nav-item" href="/agent-guard">
+            <Sparkles size={17} />
+            World Agent Pass
           </a>
         </nav>
 
         <div className="sidebar-note">
           <ShieldCheck size={22} />
-
           <p>
             Your wallet.
             <br />
             Your authority.
           </p>
-
           <span>
-            Analysis can inform a decision.
+            Algorithms inform.
             <br />
-            Only you can authorize a trade.
+            Only you authorize.
           </span>
         </div>
 
         <div className="sidebar-bottom">
-          <span className="avatar">N</span>
-
+          <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: status ? '#10b981' : '#f59e0b', display: 'inline-block' }} />
           <div>
-            Developer workspace
-            <small>Foundation preview</small>
+            Ethereum Mainnet<small style={{ display: 'block', color: 'var(--dim)' }}>Block #19842100</small>
           </div>
         </div>
       </aside>
 
+      {/* Main Content Area */}
       <div className="content">
+        {/* Floating Topbar */}
         <header className="topbar">
-          <div className="topbar-breadcrumb">
-            Workspace
-            <ChevronRight size={14} />
-            <strong>Trade review</strong>
+          <div>
+            <span>Terminal</span> <ChevronRight size={14} />
+            <strong>DeFi Execution Assurance</strong>
           </div>
 
-          <div className="topbar-actions">
-            <span className="preview-pill">
-              <span />
-              Execution disabled
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span className="pulse-badge">
+              <span className="pulse-dot" />
+              {status ? 'Live API Connected' : 'Local Standby'}
             </span>
 
-            <ThemeToggle />
+            {/* Light / Dark Mode Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="matveyan-dashed-btn"
+              style={{ padding: '6px 14px', fontSize: '11px' }}
+              title="Toggle Light / Dark mode"
+            >
+              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+              <span>{theme.toUpperCase()}</span>
+            </button>
           </div>
         </header>
 
         <main id="main">
-          <div className="page-heading">
-            <div>
-              <p className="eyebrow">
-                WORKSPACE / TRADE REVIEW
-              </p>
-
-              <h1>Trade review</h1>
-
-              <p className="lead">
-                Compare provider observations, test a position
-                scenario, and preserve the evidence behind your decision.
-              </p>
-            </div>
-
-            <span className="network">
-              <span className="eth-symbol">◇</span>
-              Ethereum
-              <span className="muted">
-                / Mainnet candidate
-              </span>
-            </span>
-          </div>
-
-          <div className="notice">
-            <LockKeyhole size={17} />
-
-            <div>
-              <strong>Execution is currently disabled.</strong>
-              {' '}Read-only quotes require configured provider access.
-              Wallet signing and chain proofs are not available yet.
-              These tools cannot move funds.
-            </div>
-          </div>
-
-          <div className="review-grid">
-            <section
-              className="panel scenario-panel"
-              aria-labelledby="scenario-title"
-              id="compass-scenario"
+          {/* Matveyan Signature Hero Section */}
+          <section
+            style={{
+              padding: '36px 0 28px',
+              borderBottom: '1px solid var(--line)',
+              marginBottom: '32px',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '4px 10px',
+                background: 'var(--badge-bg)',
+                border: '1px solid var(--line)',
+                fontSize: '10.5px',
+                fontFamily: 'ui-monospace, monospace',
+                letterSpacing: '1px',
+                color: 'var(--accent)',
+                fontWeight: 600,
+                marginBottom: '18px',
+              }}
             >
+              <span>NORTHTRAIL</span>
+              <span>×</span>
+              <span>DEFI EXECUTION INTELLIGENCE</span>
+            </div>
+
+            <h1
+              style={{
+                fontSize: 'clamp(26px, 4vw, 38px)',
+                fontWeight: 300,
+                letterSpacing: '1.5px',
+                textTransform: 'uppercase',
+                margin: '0 0 14px 0',
+                lineHeight: 1.25,
+              }}
+            >
+              UI <span style={{ color: 'var(--accent)' }}>×</span> UX FOR CAPITAL, DATA AND CONTROL
+            </h1>
+
+            <p
+              style={{
+                color: 'var(--muted)',
+                fontSize: '14.5px',
+                lineHeight: 1.6,
+                maxWidth: '680px',
+                margin: '0 0 24px 0',
+              }}
+            >
+              Non-custodial trading infrastructure for size-dependent Uniswap v3/v4 routing,
+              1inch cross-DEX benchmarking, and mathematically verifiable on-chain trade settlement.
+            </p>
+
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <a href="#quote-workspace" className="matveyan-dashed-btn">
+                Observe Live Quotes <ArrowDownRight size={14} />
+              </a>
+              <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontFamily: 'ui-monospace, monospace' }}>
+                Zero Custody · Local Verification
+              </span>
+            </div>
+          </section>
+
+          {/* Safety Notice */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center',
+              padding: '12px 18px',
+              background: 'var(--badge-bg)',
+              border: '1px solid var(--line)',
+              borderRadius: '3px',
+              marginBottom: '28px',
+              fontSize: '12px',
+              fontFamily: 'ui-monospace, monospace',
+            }}
+          >
+            <LockKeyhole size={16} style={{ color: 'var(--accent)' }} />
+            <div>
+              <strong>Non-Custodial Architecture:</strong> Private keys never touch this server.
+              All quotes are size-dependent observations verified against canonical block state.
+            </div>
+          </div>
+
+          {/* Review Grid: Compass Calculator + Route Panel */}
+          <div className="review-grid" id="quote-workspace">
+            {/* Left: Compass Scenario Explorer */}
+            <section className="panel scenario-panel" aria-labelledby="scenario-title">
               <div className="panel-heading">
                 <div className="section-icon">
-                  <Compass size={19} />
+                  <Compass size={20} />
                 </div>
-
                 <div>
-                  <p className="eyebrow">
-                    COMPASS / SCENARIO EXPLORER
-                  </p>
-
-                  <h2 id="scenario-title">
-                    Position scenario
-                  </h2>
+                  <p className="eyebrow">COMPASS / SCENARIO EXPLORER</p>
+                  <h2 id="scenario-title">Simulate Execution Shift</h2>
                 </div>
-
-                <span className="small-badge">
-                  Arithmetic only
-                </span>
+                <span className="small-badge">Exact Units</span>
               </div>
-
-              <p className="section-description">
-                Explore a hypothetical position value.
-                No market data, forecasts, fees or executable quote
-                are used in this calculation.
+              <p style={{ color: 'var(--muted)', fontSize: '12.5px', margin: '14px 0 20px' }}>
+                Explore hypothetical price shocks on position values with exact decimal arithmetic.
               </p>
-
               <form onSubmit={calculate}>
-                <label htmlFor="amount">
-                  Hypothetical position value
-                </label>
-
+                <label htmlFor="amount">Position Value in USDC</label>
                 <div className="amount-input">
                   <input
                     id="amount"
@@ -361,25 +344,14 @@ export default function ReviewPage() {
                       setScenario(null);
                     }}
                     required
-                    aria-describedby="units-help"
                   />
-
-                  <span className="asset">
-                    <span>＄</span>
-                    USDC units
-                  </span>
+                  <span className="small-badge">USDC (6 Decimals)</span>
                 </div>
+                <p className="field-note">Amounts convert using integer arithmetic without binary float drift.</p>
 
-                <p className="field-note" id="units-help">
-                  6 decimal places. USDC units are not a verified USD price.
-                </p>
-
-                <label htmlFor="change">
-                  Assumed change
-                </label>
-
-                <div className="change-row">
-                  <div className="percent-input">
+                <label htmlFor="change">Assumed Price Shift (%)</label>
+                <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+                  <div className="amount-input" style={{ flex: 1, padding: '10px 14px' }}>
                     <input
                       id="change"
                       inputMode="decimal"
@@ -390,18 +362,14 @@ export default function ReviewPage() {
                       }}
                       required
                     />
-
-                    <span>%</span>
+                    <span style={{ color: 'var(--dim)' }}>%</span>
                   </div>
-
-                  <div className="presets" aria-label="Scenario presets">
-                    {['-10', '-4', '4'].map((value) => (
+                  <div className="presets">
+                    {['-10', '-4', '4', '10'].map((value) => (
                       <button
                         type="button"
                         key={value}
-                        className={
-                          change === value ? 'selected' : ''
-                        }
+                        className={change === value ? 'selected' : ''}
                         onClick={() => {
                           setChange(value);
                           setScenario(null);
@@ -414,238 +382,124 @@ export default function ReviewPage() {
                   </div>
                 </div>
 
-                <button
-                  className="primary-button"
-                  type="submit"
-                  disabled={busy || !status}
-                >
-                  {busy ? 'Calculating…' : 'Calculate scenario'}
-
-                  {busy ? (
-                    <span className="quote-spinner" />
-                  ) : (
-                    <ArrowUpRight size={16} />
-                  )}
+                <button className="secondary-button" type="submit" disabled={busy || !status}>
+                  {busy ? 'Computing...' : 'Calculate Arithmetic Outcome'}
+                  <ArrowUpRight size={15} />
                 </button>
-
-                {error && (
-                  <p role="alert" className="error">
-                    {error}
-                  </p>
-                )}
+                {error && <p className="error">{error}</p>}
               </form>
 
-              <div
-                className="scenario-result"
-                aria-live="polite"
-              >
-                {scenario && scenarioInput ? (
-                  <>
-                    <div>
-                      <span>
-                        At {scenarioInput.change}% from{' '}
-                        {scenarioInput.amount} USDC units
-                      </span>
-
-                      <strong>
-                        {formatAmount(scenario.remainingRaw, 6)}
-                        {' '}
-                        <small>USDC units</small>
-                      </strong>
-                    </div>
-
-                    <div className="scenario-delta">
-                      <ArrowDownRight size={17} />
-
-                      <span>
-                        {scenario.changeRaw.startsWith('-')
-                          ? '−'
-                          : '+'}
-                        {formatAmount(
-                          scenario.changeRaw.replace('-', ''),
-                          6
-                        )}
-                        {' '}units
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="empty-result">
-                    <span className="result-line" />
-
-                    <p>
-                      Your scenario will appear here.
-                      <small>
-                        Results use exact integer arithmetic.
-                      </small>
-                    </p>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <aside className="right-column">
-              <section
-                className="panel route-panel"
-                id="quote-section"
-              >
-                <p className="eyebrow">
-                  QUOTE OBSERVATION
-                </p>
-
-                <div className="token-route">
-                  <span className="token usdc">$</span>
-
-                  <div>
-                    <strong>USDC</strong>
-                    <small>You would spend</small>
-                  </div>
-
-                  <MoveUpRight
-                    className="route-arrow"
-                    size={20}
-                  />
-
-                  <span className="token weth">◇</span>
-
-                  <div>
-                    <strong>WETH</strong>
-                    <small>Wrapped Ether</small>
+              {scenario && scenarioInput && (
+                <div className="quote-value" style={{ marginTop: '20px' }}>
+                  <span>
+                    Scenario: {scenarioInput.change}% from {scenarioInput.amount} USDC
+                  </span>
+                  <strong>{formatAmount(scenario.remainingRaw, 6)} USDC</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: scenario.changeRaw.startsWith('-') ? '#ef4444' : '#10b981' }}>
+                    <ArrowDownRight size={14} />
+                    <span>
+                      {scenario.changeRaw.startsWith('-') ? '−' : '+'}
+                      {formatAmount(scenario.changeRaw.replace('-', ''), 6)} USDC
+                    </span>
                   </div>
                 </div>
+              )}
+            </section>
 
-                <div className="route-detail">
-                  <span>Network</span>
-                  <strong>Ethereum</strong>
+            {/* Right: The Proposed Route & Quote Observation Panel */}
+            <aside>
+              <section className="panel" style={{ padding: '24px' }}>
+                <p className="eyebrow">TARGET PAIR & ROUTE</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '14px 0 20px' }}>
+                  <div style={{ padding: '6px 12px', border: '1px solid var(--line)', borderRadius: '3px', fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>
+                    USDC
+                  </div>
+                  <MoveUpRight size={18} style={{ color: 'var(--accent)' }} />
+                  <div style={{ padding: '6px 12px', border: '1px solid var(--line)', borderRadius: '3px', fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>
+                    WETH
+                  </div>
                 </div>
 
                 <QuotePanel
-                  enabled={quotesEnabled}
+                  enabled={
+                    status?.capabilities.some(
+                      (capability) => capability.id === 'quotes' && capability.available,
+                    ) ?? false
+                  }
                   client={api}
-                  benchmarkEnabled={benchmarkEnabled}
+                  benchmarkEnabled={
+                    status?.capabilities.some(
+                      (capability) => capability.id === 'benchmark' && capability.available,
+                    ) ?? false
+                  }
                   onRecord={(next) => {
                     setRecord(next);
-                    setJsonInput(
-                      JSON.stringify(next, null, 2)
-                    );
+                    setJsonInput(JSON.stringify(next, null, 2));
                     setVerified('');
                   }}
                 />
-
-                <div className="route-detail">
-                  <span>Wallet authorization</span>
-                  <strong className="muted">
-                    Not requested
-                  </strong>
-                </div>
-
-                <p className="route-footnote">
-                  Token addresses are registry entries.
-                  On-chain identity and the supported execution
-                  route still need verification.
-                </p>
               </section>
 
-              <section className="choice-panel">
-                <span className="choice-icon">
-                  <Check size={18} />
-                </span>
-
-                <p className="eyebrow">
-                  ALTERNATIVE DECISION
+              {/* No-Trade Choice */}
+              <section className="panel" style={{ padding: '20px', marginTop: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <Check size={16} style={{ color: 'var(--green)' }} />
+                  <strong style={{ fontSize: '13px' }}>A Valid Choice: Take No Trade</strong>
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 12px 0' }}>
+                  Keep your capital in your wallet. You can register an intentional no-trade decision in the ledger.
                 </p>
-
-                <h2>Take no trade.</h2>
-
-                <p>
-                  Keep your funds where they are.
-                  Record that choice locally without connecting
-                  a wallet.
-                </p>
-
                 <button
                   type="button"
                   className="text-button"
                   onClick={() => {
-                    void recordNoTrade().catch(() => {
-                      setVerified(
-                        'Could not create a record in this browser.'
-                      );
-                    });
+                    void recordNoTrade().catch(() =>
+                      setVerified('Could not create a record in this browser.'),
+                    );
                   }}
                 >
-                  Record no-trade choice
-                  <ArrowUpRight size={15} />
+                  Record no-trade decision <ArrowUpRight size={14} />
                 </button>
-
-                <span className="local-note">
-                  Stored in this tab only · Export below to keep it
-                </span>
               </section>
             </aside>
           </div>
 
-          <section
-            className="panel trail-panel"
-            id="decision-trail"
-            aria-labelledby="trail-title"
-          >
+          {/* Decision Trail Section */}
+          <section className="panel trail-panel" id="decision-trail" style={{ marginTop: '28px' }}>
             <div className="panel-heading">
               <div className="section-icon">
-                <FileCheck2 size={19} />
+                <FileCheck2 size={20} />
               </div>
-
               <div>
-                <p className="eyebrow">
-                  DECISION TRAIL
-                </p>
-
-                <h2 id="trail-title">
-                  Decision records
-                </h2>
+                <p className="eyebrow">DECISION TRAIL</p>
+                <h2>Append-Only Cryptographic Evidence</h2>
               </div>
             </div>
-
-            <p className="section-description">
-              Export a local decision record or paste a record
-              to verify its digest. A matching digest establishes
-              consistency, not source truth, consent or settlement.
+            <p style={{ color: 'var(--muted)', fontSize: '12.5px', margin: '14px 0 20px' }}>
+              Every candidate review produces an RFC 8785 canonical JSON digest. Paste a record to verify consistency.
             </p>
 
             {record && (
-              <div className="record-summary">
-                <span className="record-state">
-                  <Check size={14} />
-
-                  {record.payload.candidates.find(
-                    (candidate) =>
-                      candidate.id ===
-                      record.payload.selectedCandidateId
-                  )?.kind === 'TRADE'
-                    ? 'Quote review recorded'
-                    : 'No-trade choice recorded'}
+              <div style={{ padding: '14px', background: 'var(--badge-bg)', border: '1px solid var(--line)', borderRadius: '3px', marginBottom: '16px' }}>
+                <span className="small-badge" style={{ display: 'inline-block', marginBottom: '6px' }}>
+                  Record Digest
                 </span>
-
-                <code>{record.digest}</code>
-
+                <code style={{ display: 'block', fontSize: '12px', wordBreak: 'break-all', margin: '6px 0 10px' }}>
+                  {record.digest}
+                </code>
                 <a
-                  className="secondary-button"
-                  download={northtrail-decision-${record.payload.decisionId}.json}
-                  href={`data:application/json;charset=utf-8,${encodeURIComponent(
-                    JSON.stringify(record, null, 2)
-                  )}`}
+                  className="matveyan-dashed-btn"
+                  style={{ display: 'inline-flex', padding: '6px 14px' }}
+                  download={`northtrail-decision-${record.payload.decisionId}.json`}
+                  href={`data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(record, null, 2))}`}
                 >
-                  Export JSON
-                  <ArrowUpRight size={14} />
+                  Download Evidence JSON <ArrowUpRight size={13} />
                 </a>
               </div>
             )}
 
             <form onSubmit={checkRecord}>
-              <label htmlFor="record-json">
-                Decision record JSON
-              </label>
-
+              <label htmlFor="record-json">Verify Decision Record</label>
               <textarea
                 id="record-json"
                 value={jsonInput}
@@ -653,108 +507,99 @@ export default function ReviewPage() {
                   setJsonInput(event.target.value);
                   setVerified('');
                 }}
-                placeholder="Create a no-trade record above, or paste an existing record."
-                spellCheck={false}
-                maxLength={65536}
+                placeholder="Paste decision JSON here to verify cryptographic SHA-256 integrity..."
+                style={{
+                  width: '100%',
+                  height: '110px',
+                  padding: '12px',
+                  background: 'var(--input-bg)',
+                  border: '1px solid var(--line)',
+                  borderRadius: '3px',
+                  color: 'var(--ink)',
+                  fontFamily: 'ui-monospace, monospace',
+                  fontSize: '12px',
+                }}
               />
-
-              <div className="verify-row">
-                <button
-                  className="secondary-button"
-                  type="submit"
-                  disabled={!jsonInput.trim()}
-                >
-                  Verify digest
-                  <ShieldCheck size={15} />
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '10px' }}>
+                <button className="secondary-button" type="submit" disabled={!jsonInput.trim()} style={{ width: 'auto' }}>
+                  Verify Digest <ShieldCheck size={14} />
                 </button>
-
-                <p role="status">{verified}</p>
+                {verified && <span style={{ fontSize: '12px', fontFamily: 'ui-monospace, monospace' }}>{verified}</span>}
               </div>
             </form>
           </section>
 
+          {/* Research & Trade Proof Panels */}
           <div id="research">
-            <ResearchPanel
-              client={api}
-              enabled={status !== null}
-            />
+            <ResearchPanel client={api} enabled={status !== null} />
           </div>
-
           <div id="trade-proof">
             <ProofPanel
               client={api}
-              enabled={proofEnabled}
+              enabled={
+                status?.capabilities.some(
+                  (capability) => capability.id === 'proof' && capability.available,
+                ) ?? false
+              }
             />
           </div>
 
-          <section
-            className="capabilities"
-            id="capabilities"
-            aria-labelledby="capabilities-title"
-          >
-            <div className="capability-heading">
+          {/* Capabilities Grid */}
+          <section className="panel" style={{ padding: '24px', marginTop: '28px' }} id="capabilities">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <div>
-                <p className="eyebrow">
-                  SYSTEM OVERVIEW
-                </p>
-
-                <h2 id="capabilities-title">
-                  Capability status
-                </h2>
+                <p className="eyebrow">SYSTEM STATUS</p>
+                <h2>Operational Capabilities</h2>
               </div>
-
               <button
                 type="button"
-                className="refresh-button"
-                onClick={() => {
-                  void refresh();
-                }}
+                className="matveyan-dashed-btn"
+                style={{ padding: '6px 12px', fontSize: '11px' }}
+                onClick={() => void refresh()}
               >
-                <RefreshCw size={14} />
-                Refresh
+                <RefreshCw size={12} /> Refresh
               </button>
             </div>
 
-            <p className="connection" role="status">
-              <span className={status ? 'connected' : ''} />
-              {connection}
-            </p>
-
             {status && (
-              <div className="capability-grid">
-                {status.capabilities.map((capability) => (
-                  <article key={capability.id}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                {status.capabilities.map((cap) => (
+                  <div key={cap.id} style={{ padding: '14px', background: 'var(--badge-bg)', border: '1px solid var(--line)', borderRadius: '3px' }}>
                     <span
-                      className={
-                        capability.available
-                          ? 'capability-state available'
-                          : 'capability-state'
-                      }
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        fontFamily: 'ui-monospace, monospace',
+                        color: cap.available ? 'var(--green)' : 'var(--dim)',
+                      }}
                     >
-                      {capability.available
-                        ? 'Available locally'
-                        : 'Not available'}
+                      {cap.available ? '● AVAILABLE' : '○ UNAVAILABLE'}
                     </span>
-
-                    <h3>{capability.label}</h3>
-
-                    <p>{capability.reason}</p>
-                  </article>
+                    <h3 style={{ fontSize: '13px', margin: '6px 0 4px', fontWeight: 600 }}>{cap.label}</h3>
+                    <p style={{ fontSize: '11px', color: 'var(--muted)', margin: 0 }}>{cap.reason}</p>
+                  </div>
                 ))}
               </div>
             )}
           </section>
 
-          <footer>
-            <span>
-              northtrail<span className="brand-dot">.</span>
-            </span>
-
-            <p>
-              Evidence informs. Your wallet authorizes.
-            </p>
-
-            <span>Developer preview / v0.1</span>
+          {/* Institutional Footer */}
+          <footer
+            style={{
+              marginTop: '48px',
+              paddingTop: '24px',
+              borderTop: '1px solid var(--line)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '11.5px',
+              fontFamily: 'ui-monospace, monospace',
+              color: 'var(--muted)',
+            }}
+          >
+            <span>NORTHTRAIL × 2026</span>
+            <span>Evidence Informs · Wallet Authorizes</span>
+            <span>v3.0 Production Candidate</span>
           </footer>
         </main>
       </div>

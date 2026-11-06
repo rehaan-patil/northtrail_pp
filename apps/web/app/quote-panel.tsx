@@ -84,8 +84,8 @@ export function QuotePanel({
 
       const request = {
         chainId: 1 as const,
-        owner: wallet as 0x${string},
-        recipient: wallet as 0x${string},
+        owner: wallet as `0x${string}`,
+        recipient: wallet as `0x${string}`,
         tokenIn: input.address,
         tokenOut: output.address,
         amountInRaw: parseAmount(amount, 6),
