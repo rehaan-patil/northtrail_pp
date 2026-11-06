@@ -22,14 +22,13 @@ const Token = z.object({
   decimals: z.string().regex(/^(0|[1-9][0-9]?)$/),
 });
 const Pool = z.object({
-  type: z.enum(['v3-pool', 'v4-pool']),
+  type: z.literal('v3-pool'),
   address: AddressSchema,
   tokenIn: Token,
   tokenOut: Token,
-  fee: z.string(), // v4 supports dynamic fees or custom tiers
+  fee: z.enum(['100', '500', '3000', '10000']),
   amountIn: PositiveAmountSchema.optional(),
   amountOut: PositiveAmountSchema.optional(),
-  hooks: AddressSchema.optional(),
 });
 const ResponseSchema = z.object({
   requestId: z.string().min(1).max(200),
@@ -185,23 +184,22 @@ export async function normalizeQuote(
     providerMinOutRaw: quote.output.minimumAmount ?? aggregate?.minAmount ?? null,
     gasEstimateWei: quote.gasFee,
     approvalCost: 'UNKNOWN',
-    routes: quote.route.map((path) =>
-  path.map((pool) => ({
-    pool: pool.address,
-    tokenIn: pool.tokenIn.address,
-    tokenOut: pool.tokenOut.address,
-    feePips: Number(pool.fee) || 0,
-    protocol: pool.type === 'v4-pool' ? ('V4' as const) : ('V3' as const),
-    hooks: pool.hooks ?? '0x0000000000000000000000000000000000000000',
-  })),
+        routes: quote.route.map((path) =>
+      path.map((pool) => ({
+        pool: pool.address,
+        tokenIn: pool.tokenIn.address,
+        tokenOut: pool.tokenOut.address,
+        feePips: Number(pool.fee),
+        protocol: 'V3' as const,
+      })),
 ),
     executionAuthorized: false,
     limitations: [
-      'Provider observation only. Pool identity, block hash, canonicality and on-chain state are not independently verified.',
-      'Review expiry is a local 30-second policy measured from request start; it is not a provider execution guarantee.',
-      'Allowance, approval/reset gas, Permit2, calldata, owner authority and settlement are not verified. No spending is authorized.',
-      'Only CLASSIC V3 USDC/WETH routes with exact endpoint amount conservation and no integrator fee allocation are accepted.',
-    ],
+  'Provider observation only. Pool identity, block hash, canonicality and on-chain state are not independently verified.',
+  'Review expiry is a local 30-second policy measured from request start; it is not a provider execution guarantee.',
+  'Allowance, approval/reset gas, Permit2, calldata, owner authority and settlement are not verified. No spending is authorized.',
+  'Uniswap v4 pools with unverified hooks are restricted from automatic settlement to prevent dynamic fee exploits or reentrancy.',
+],
   });
 }
 
@@ -233,7 +231,7 @@ export function createUniswapQuoter(options: {
   swapper: request.owner,
   recipient: request.recipient,
   slippageTolerance: request.slippageBps / 100,
-  protocols: ['V3', 'V4'], // <--- Enable Uniswap v4 alongside v3
+  protocols: ['V3'], 
   routingPreference: 'BEST_PRICE',
   permitAmount: 'EXACT',
   generatePermitAsTransaction: false,

@@ -12,7 +12,16 @@ const NonzeroAddress = AddressSchema.refine(
   'Address must be nonzero',
 );
 
-// In packages/domain/src/quotes.ts
+export const QuoteRequestSchema = z.strictObject({
+  chainId: z.literal(1),
+  owner: NonzeroAddress,
+  recipient: NonzeroAddress,
+  tokenIn: NonzeroAddress,
+  tokenOut: NonzeroAddress,
+  amountInRaw: PositiveAmountSchema,
+  slippageBps: z.number().int().min(0).max(1_000),
+});
+export type QuoteRequest = z.infer<typeof QuoteRequestSchema>;
 
 export const QuoteObservationSchema = z.strictObject({
   schemaVersion: z.literal('1'),
@@ -42,7 +51,6 @@ export const QuoteObservationSchema = z.strictObject({
             tokenIn: NonzeroAddress,
             tokenOut: NonzeroAddress,
             feePips: z.number().int().min(0).max(1_000_000),
-            // Add v4 protocol and hook metadata:
             protocol: z.enum(['V3', 'V4']).default('V3'),
             hooks: AddressSchema.optional(),
           }),
