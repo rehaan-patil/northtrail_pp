@@ -11,15 +11,15 @@ import {
 } from '@northtrail/domain';
 import { createQuoteTransport } from '@northtrail/provider-http';
 
-const TokenSchema = z.object({
+const Token = z.object({
   address: AddressSchema,
   decimals: z.number().int().min(0).max(36),
   isFoT: z.literal(false).optional(),
 });
-
-const OneinchResponseSchema = z.object({
-  srcToken: TokenSchema,
-  dstToken: TokenSchema,
+// Current v6.1 response topology, not the legacy nested-array protocols format.
+const ResponseSchema = z.object({
+  srcToken: Token,
+  dstToken: Token,
   dstAmount: PositiveAmountSchema,
   gas: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   protocols: z
@@ -54,15 +54,13 @@ const OneinchResponseSchema = z.object({
 
 function validate(input: unknown) {
   const request = QuoteRequestSchema.parse(input);
-  if (request.tokenIn !== USDC.address || request.tokenOut !== WETH.address) {
+  if (request.tokenIn !== USDC.address || request.tokenOut !== WETH.address)
     throw new NorthtrailError(
       'UNSUPPORTED_TOKEN',
       'Only registry USDC to WETH on Ethereum is supported.',
     );
-  }
   return request;
 }
-
 export async function normalizeOneinchQuote(
   raw: unknown,
   input: QuoteRequest,
@@ -70,45 +68,31 @@ export async function normalizeOneinchQuote(
   fetchedAt: number,
 ) {
   const request = validate(input);
-  const response = OneinchResponseSchema.safeParse(raw);
-
-  const isMatched =
-    response.success &&
-    response.data.srcToken.address === request.tokenIn &&
-    response.data.dstToken.address === request.tokenOut &&
-    response.data.srcToken.decimals === 6 &&
-    response.data.dstToken.decimals === 18;
-
-  if (!isMatched) {
+  const response = ResponseSchema.safeParse(raw);
+  if (
+    !response.success ||
+    response.data.srcToken.address !== request.tokenIn ||
+    response.data.dstToken.address !== request.tokenOut ||
+    response.data.srcToken.decimals !== 6 ||
+    response.data.dstToken.decimals !== 18
+  )
     throw new NorthtrailError(
       'PROVIDER_INVALID_RESPONSE',
       '1inch quote did not match the supported observation contract.',
       502,
     );
-  }
-
-  const isTimingValid =
-    Number.isSafeInteger(requestedAt) &&
-    Number.isSafeInteger(fetchedAt) &&
-    fetchedAt >= requestedAt &&
-    fetchedAt - requestedAt < 30_000;
-
-  if (!isTimingValid) {
+  if (
+    !Number.isSafeInteger(requestedAt) ||
+    !Number.isSafeInteger(fetchedAt) ||
+    fetchedAt < requestedAt ||
+    fetchedAt - requestedAt >= 30_000
+  )
     throw new NorthtrailError(
       'QUOTE_STALE',
       'The quote arrived outside the local review window.',
       502,
     );
-  }
-
   const quote = response.data;
-
-  const sources = new Set(
-    quote.protocols.flatMap((path) =>
-      path.hops.flatMap((hop) => hop.protocols.map((source) => source.name)),
-    ),
-  );
-
   return AggregatorObservationSchema.parse({
     schemaVersion: '1',
     kind: 'AGGREGATOR_OBSERVATION',
@@ -126,7 +110,13 @@ export async function normalizeOneinchQuote(
     chainVerification: 'NOT_VERIFIED',
     recipientBinding: 'REQUEST_ONLY',
     approvalCost: 'UNKNOWN',
-    liquiditySources: [...sources].sort(),
+    liquiditySources: [
+      ...new Set(
+        quote.protocols.flatMap((path) =>
+          path.hops.flatMap((hop) => hop.protocols.map((source) => source.name)),
+        ),
+      ),
+    ].sort(),
     executionAuthorized: false,
     limitations: [
       'Aggregator provider observation, not an executable route, confirmed pool topology or independently pinned chain state.',
@@ -142,18 +132,14 @@ export function createOneinchQuoter(options: {
   fetch?: typeof fetch;
   now?: () => number;
 }) {
-  if (!options.apiKey.trim()) {
+  if (!options.apiKey.trim())
     throw new NorthtrailError('PROVIDER_UNAVAILABLE', '1inch access is not configured.', 503);
-  }
-
   const transport = createQuoteTransport(options);
-
   return {
     async quote(input: unknown) {
       const request = validate(input);
       const url = new URL('https://api.1inch.com/swap/v6.1/1/quote');
-
-      const params: Record<string, string> = {
+      const params = {
         src: request.tokenIn,
         dst: request.tokenOut,
         amount: request.amountInRaw,
@@ -162,19 +148,11 @@ export function createOneinchQuoter(options: {
         includeProtocols: 'true',
         includeGas: 'true',
       };
-
-      for (const [key, value] of Object.entries(params)) {
-        url.searchParams.set(key, value);
-      }
-
+      for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
       const result = await transport(url.toString(), {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${options.apiKey}`,
-          Accept: 'application/json',
-        },
+        headers: { Authorization: `Bearer ${options.apiKey}`, Accept: 'application/json' },
       });
-
       return normalizeOneinchQuote(result.payload, request, result.requestedAt, result.fetchedAt);
     },
   };

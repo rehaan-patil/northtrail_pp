@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { createQuoteTransport } from '@northtrail/provider-http';
+import { z } from 'zod';
 import { USDC, WETH } from '@northtrail/config';
 import {
   AddressSchema,
@@ -15,25 +15,22 @@ import {
 } from '@northtrail/domain';
 
 const ENDPOINT = 'https://trade-api.gateway.uniswap.org/v1/quote';
-const REVIEW_TTL_MS = 30_000;
-
-const TokenSchema = z.object({
+const REVIEW_TTL_MS = 30_000; // Local review policy, not provider validity or chain freshness.
+const Token = z.object({
   address: AddressSchema,
   chainId: z.literal(1),
   decimals: z.string().regex(/^(0|[1-9][0-9]?)$/),
 });
-
-const PoolSchema = z.object({
+const Pool = z.object({
   type: z.literal('v3-pool'),
   address: AddressSchema,
-  tokenIn: TokenSchema,
-  tokenOut: TokenSchema,
+  tokenIn: Token,
+  tokenOut: Token,
   fee: z.enum(['100', '500', '3000', '10000']),
   amountIn: PositiveAmountSchema.optional(),
   amountOut: PositiveAmountSchema.optional(),
 });
-
-const UniswapResponseSchema = z.object({
+const ResponseSchema = z.object({
   requestId: z.string().min(1).max(200),
   routing: z.literal('CLASSIC'),
   quote: z.object({
@@ -51,7 +48,7 @@ const UniswapResponseSchema = z.object({
     }),
     gasFee: RawAmountSchema,
     blockNumber: PositiveAmountSchema,
-    route: z.array(z.array(PoolSchema).min(1).max(8)).min(1).max(8),
+    route: z.array(z.array(Pool).min(1).max(8)).min(1).max(8),
     txFailureReasons: z.array(z.string()).max(20),
     aggregatedOutputs: z
       .array(
@@ -69,7 +66,7 @@ const UniswapResponseSchema = z.object({
   }),
 });
 
-function invalidQuote(): never {
+function invalid(): never {
   throw new NorthtrailError(
     'PROVIDER_INVALID_RESPONSE',
     'Uniswap response failed the supported quote contract.',
@@ -80,15 +77,15 @@ function invalidQuote(): never {
 
 export function validateQuoteRequest(input: unknown): QuoteRequest {
   const request = QuoteRequestSchema.parse(input);
-  if (request.tokenIn !== USDC.address || request.tokenOut !== WETH.address) {
+  if (request.tokenIn !== USDC.address || request.tokenOut !== WETH.address)
     throw new NorthtrailError(
       'UNSUPPORTED_TOKEN',
       'Only registry USDC to WETH on Ethereum is supported.',
     );
-  }
   return request;
 }
 
+// Analysis-only normalization. Never returns permit data, calldata or a transaction.
 export async function normalizeQuote(
   raw: unknown,
   input: QuoteRequest,
@@ -96,106 +93,78 @@ export async function normalizeQuote(
   fetchedAt: number,
 ): Promise<QuoteObservation> {
   const request = validateQuoteRequest(input);
-  const parsed = UniswapResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    invalidQuote();
-  }
-
+  const parsed = ResponseSchema.safeParse(raw);
+  if (!parsed.success) invalid();
   const { quote, requestId } = parsed.data;
-
-  const matchesRequest =
-    quote.swapper === request.owner &&
-    quote.input.token === request.tokenIn &&
-    quote.output.token === request.tokenOut &&
-    quote.output.recipient === request.recipient &&
-    quote.input.amount === request.amountInRaw &&
-    quote.slippage === request.slippageBps / 100 &&
-    quote.txFailureReasons.length === 0;
-
-  if (!matchesRequest) {
-    invalidQuote();
-  }
-
-  const isTimingValid =
-    Number.isSafeInteger(requestedAt) &&
-    Number.isSafeInteger(fetchedAt) &&
-    fetchedAt >= requestedAt &&
-    fetchedAt - requestedAt < REVIEW_TTL_MS;
-
-  if (!isTimingValid) {
+  if (
+    quote.swapper !== request.owner ||
+    quote.input.token !== request.tokenIn ||
+    quote.output.token !== request.tokenOut ||
+    quote.output.recipient !== request.recipient ||
+    quote.input.amount !== request.amountInRaw ||
+    quote.slippage !== request.slippageBps / 100 ||
+    quote.txFailureReasons.length > 0
+  )
+    invalid();
+  if (
+    !Number.isSafeInteger(requestedAt) ||
+    !Number.isSafeInteger(fetchedAt) ||
+    fetchedAt < requestedAt ||
+    fetchedAt - requestedAt >= REVIEW_TTL_MS
+  )
     throw new NorthtrailError(
       'QUOTE_STALE',
       'The quote arrived outside the local review window.',
       502,
     );
-  }
-
   const minOut = minimumOutput(quote.output.amount, request.slippageBps);
   const aggregate = quote.aggregatedOutputs?.[0];
-
   if (
     aggregate &&
     (aggregate.token !== request.tokenOut ||
       aggregate.recipient !== request.recipient ||
       aggregate.amount !== quote.output.amount)
-  ) {
-    invalidQuote();
-  }
-
-  for (const minimum of [quote.output.minimumAmount, aggregate?.minAmount]) {
+  )
+    invalid();
+  for (const minimum of [quote.output.minimumAmount, aggregate?.minAmount])
     if (
       minimum !== undefined &&
       (BigInt(minimum) < BigInt(minOut) || BigInt(minimum) > BigInt(quote.output.amount))
-    ) {
-      invalidQuote();
-    }
-  }
-
+    )
+      invalid();
   let totalInput = 0n;
   let totalOutput = 0n;
-
   for (const path of quote.route) {
-    const firstHop = path[0]!;
-    const lastHop = path.at(-1)!;
-
-    const hopsValid =
-      firstHop.tokenIn.address === request.tokenIn &&
-      lastHop.tokenOut.address === request.tokenOut &&
-      firstHop.tokenIn.decimals === '6' &&
-      lastHop.tokenOut.decimals === '18' &&
-      Boolean(firstHop.amountIn) &&
-      Boolean(lastHop.amountOut);
-
-    if (!hopsValid) {
-      invalidQuote();
-    }
-
-    totalInput += BigInt(firstHop.amountIn!);
-    totalOutput += BigInt(lastHop.amountOut!);
-
+    const first = path[0]!;
+    const last = path.at(-1)!;
+    if (
+      first.tokenIn.address !== request.tokenIn ||
+      last.tokenOut.address !== request.tokenOut ||
+      first.tokenIn.decimals !== '6' ||
+      last.tokenOut.decimals !== '18' ||
+      !first.amountIn ||
+      !last.amountOut
+    )
+      invalid();
+    totalInput += BigInt(first.amountIn);
+    totalOutput += BigInt(last.amountOut);
     for (let i = 0; i < path.length; i++) {
       const pool = path[i]!;
       if (
         pool.address === '0x0000000000000000000000000000000000000000' ||
         pool.tokenIn.address === pool.tokenOut.address
-      ) {
-        invalidQuote();
-      }
-
+      )
+        invalid();
       if (
         i > 0 &&
         (path[i - 1]!.tokenOut.address !== pool.tokenIn.address ||
           path[i - 1]!.tokenOut.decimals !== pool.tokenIn.decimals)
-      ) {
-        invalidQuote();
-      }
+      )
+        invalid();
     }
   }
-
-  if (totalInput !== BigInt(request.amountInRaw) || totalOutput !== BigInt(quote.output.amount)) {
-    invalidQuote();
-  }
-
+  if (totalInput !== BigInt(request.amountInRaw) || totalOutput !== BigInt(quote.output.amount))
+    invalid();
   return QuoteObservationSchema.parse({
     schemaVersion: '1',
     kind: 'QUOTE_OBSERVATION',
@@ -238,12 +207,9 @@ export function createUniswapQuoter(options: {
   fetch?: typeof fetch;
   now?: () => number;
 }) {
-  if (!options.apiKey.trim()) {
+  if (!options.apiKey.trim())
     throw new NorthtrailError('PROVIDER_UNAVAILABLE', 'Uniswap access is not configured.', 503);
-  }
-
   const transport = createQuoteTransport(options);
-
   return {
     async quote(input: unknown): Promise<QuoteObservation> {
       const request = validateQuoteRequest(input);
@@ -271,7 +237,6 @@ export function createUniswapQuoter(options: {
           integratorFees: [],
         }),
       });
-
       return normalizeQuote(result.payload, request, result.requestedAt, result.fetchedAt);
     },
   };
