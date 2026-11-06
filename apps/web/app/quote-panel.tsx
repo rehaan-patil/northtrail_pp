@@ -300,6 +300,34 @@ export function QuotePanel({
             <span>Approval / reset cost</span>
             <strong>Unknown</strong>
           </div>
+               {quote.routes?.map((path, pathIdx) => (
+            <div
+              key={pathIdx}
+              className="route-detail"
+              style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}
+            >
+              <span className="field-note">Route Hop {pathIdx + 1}:</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {path.map((hop, hopIdx) => (
+                  <span
+                    key={hopIdx}
+                    className="small-badge"
+                    style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}
+                  >
+                    <strong style={{ color: (hop as any).protocol === 'V4' ? '#10b981' : '#3b82f6' }}>
+                      {(hop as any).protocol ?? 'V3'}
+                    </strong>
+                    <span>Fee: {hop.feePips / 10000}%</span>
+                    {(hop as any).hooks &&
+                      (hop as any).hooks !== '0x0000000000000000000000000000000000000000' && (
+                        <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>• Hook Attached</span>
+                      )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+
           <p className="field-note">
             Fetched {new Date(quote.fetchedAt).toLocaleTimeString()} · Provider block{' '}
             {quote.providerBlockNumber}. Block hash and canonicality are not verified.
