@@ -1,0 +1,27 @@
+{
+  "name": "@northtrail/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup",
+    "start": "node dist/runtime/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@northtrail/config": "workspace:*",
+    "@northtrail/domain": "workspace:*",
+    "@northtrail/db": "workspace:*",
+    "@northtrail/compass": "workspace:*",
+    "@northtrail/uniswap": "workspace:*",
+    "@northtrail/oneinch": "workspace:*",
+    "fastify": "5.12.8",
+    "@fastify/cors": "11.4.1",
+    "@fastify/helmet": "13.2.0",
+    "@fastify/rate-limit": "10.3.0",
+    "zod": "4.6.7",
+    "@electric-sql/pglite": "0.5.15",
+    "pg": "8.23.1"
+  }
+}
