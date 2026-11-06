@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import {
-  AgentMandate,
-  AgentPassChallenge,
   AgentPassChallengeSchema,
-  MandateEvaluationResult,
-  MandateExceptionRequest,
   NorthtrailError,
-  WorldAgentIdentity,
-  WorldAgentPass,
-  WorldProofPayload,
   digestJson,
+  type AgentMandate,
+  type AgentPassChallenge,
+  type MandateEvaluationResult,
+  type MandateExceptionRequest,
+  type WorldAgentIdentity,
+  type WorldAgentPass,
+  type WorldProofPayload,
 } from '@northtrail/domain';
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes review validity

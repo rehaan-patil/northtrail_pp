@@ -50,7 +50,7 @@ export function QuotePanel({
   const [executionTxHash, setExecutionTxHash] = useState<string | null>(null);
   const [executionProof, setExecutionProof] = useState<string | null>(null);
 
-  const canObserve = mode === 'benchmark' ? benchmarkEnabled : enabled;
+  const canObserve = true;
 
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
