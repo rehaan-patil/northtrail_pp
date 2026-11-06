@@ -1,0 +1,15 @@
+{
+  "name": "@northtrail/oneinch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@northtrail/provider-http": "workspace:*",
+    "@northtrail/domain": "workspace:*",
+    "@northtrail/config": "workspace:*",
+    "zod": "4.6.7"
+  }
+}
