@@ -22,13 +22,14 @@ const Token = z.object({
   decimals: z.string().regex(/^(0|[1-9][0-9]?)$/),
 });
 const Pool = z.object({
-  type: z.literal('v3-pool'),
+  type: z.enum(['v3-pool', 'v4-pool']),
   address: AddressSchema,
   tokenIn: Token,
   tokenOut: Token,
-  fee: z.enum(['100', '500', '3000', '10000']),
+  fee: z.string(), // v4 supports dynamic fees or custom tiers
   amountIn: PositiveAmountSchema.optional(),
   amountOut: PositiveAmountSchema.optional(),
+  hooks: AddressSchema.optional(),
 });
 const ResponseSchema = z.object({
   requestId: z.string().min(1).max(200),
@@ -185,13 +186,15 @@ export async function normalizeQuote(
     gasEstimateWei: quote.gasFee,
     approvalCost: 'UNKNOWN',
     routes: quote.route.map((path) =>
-      path.map((pool) => ({
-        pool: pool.address,
-        tokenIn: pool.tokenIn.address,
-        tokenOut: pool.tokenOut.address,
-        feePips: Number(pool.fee),
-      })),
-    ),
+  path.map((pool) => ({
+    pool: pool.address,
+    tokenIn: pool.tokenIn.address,
+    tokenOut: pool.tokenOut.address,
+    feePips: Number(pool.fee) || 0,
+    protocol: pool.type === 'v4-pool' ? ('V4' as const) : ('V3' as const),
+    hooks: pool.hooks ?? '0x0000000000000000000000000000000000000000',
+  })),
+),
     executionAuthorized: false,
     limitations: [
       'Provider observation only. Pool identity, block hash, canonicality and on-chain state are not independently verified.',
@@ -221,21 +224,21 @@ export function createUniswapQuoter(options: {
           Accept: 'application/json',
         },
         body: JSON.stringify({
-          type: 'EXACT_INPUT',
-          amount: request.amountInRaw,
-          tokenInChainId: 1,
-          tokenOutChainId: 1,
-          tokenIn: request.tokenIn,
-          tokenOut: request.tokenOut,
-          swapper: request.owner,
-          recipient: request.recipient,
-          slippageTolerance: request.slippageBps / 100,
-          protocols: ['V3'],
-          routingPreference: 'BEST_PRICE',
-          permitAmount: 'EXACT',
-          generatePermitAsTransaction: false,
-          integratorFees: [],
-        }),
+  type: 'EXACT_INPUT',
+  amount: request.amountInRaw,
+  tokenInChainId: 1,
+  tokenOutChainId: 1,
+  tokenIn: request.tokenIn,
+  tokenOut: request.tokenOut,
+  swapper: request.owner,
+  recipient: request.recipient,
+  slippageTolerance: request.slippageBps / 100,
+  protocols: ['V3', 'V4'], // <--- Enable Uniswap v4 alongside v3
+  routingPreference: 'BEST_PRICE',
+  permitAmount: 'EXACT',
+  generatePermitAsTransaction: false,
+  integratorFees: [],
+}),
       });
       return normalizeQuote(result.payload, request, result.requestedAt, result.fetchedAt);
     },
