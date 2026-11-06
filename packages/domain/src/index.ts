@@ -4,3 +4,6 @@ export * from './schemas.js';
 export * from './states.js';
 export * from './decision.js';
 export * from './quotes.js';
+export * from './assurance.js';
+export * from './research.js';
+export * from './proofs.js';
