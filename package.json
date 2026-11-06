@@ -1,0 +1,43 @@
+{
+  "name": "northtrail",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "predev": "pnpm --filter @northtrail/sdk build",
+    "dev": "pnpm --parallel --filter @northtrail/api --filter @northtrail/web dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm --filter @northtrail/sdk build && tsc --noEmit && pnpm --filter @northtrail/web typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:migrate": "pnpm --filter @northtrail/api exec node --env-file-if-exists=.env --import tsx ../../packages/db/src/migrate.ts",
+    "check-env": "pnpm --filter @northtrail/api exec node --env-file-if-exists=.env --import tsx ../../scripts/check-env.ts",
+    "demo": "pnpm --filter @northtrail/demo-consumer start",
+    "security:scan": "node scripts/security-scan.mjs",
+    "smoke:built": "node scripts/smoke-built.mjs",
+    "smoke:sdk": "node scripts/smoke-sdk-package.mjs",
+    "test:deployment": "node --test scripts/verify-deployment-source.test.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.0",
+    "@types/node": "26.6.6",
+    "@types/pg": "8.23.1",
+    "eslint": "10.14.0",
+    "pnpm": "^12.18.0",
+    "prettier": "3.9.10",
+    "tsup": "9.0.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  }
+}
