@@ -1,0 +1,14 @@
+{
+  "name": "@northtrail/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "pg": "8.23.1",
+    "@northtrail/domain": "workspace:*"
+  }
+}
