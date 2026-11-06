@@ -7,14 +7,12 @@ export const USDC = AssetSchema.parse({
   decimals: 6,
   symbol: 'USDC',
 });
-
 export const WETH = AssetSchema.parse({
   chainId: 1,
   address: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
   decimals: 18,
   symbol: 'WETH',
 });
-
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('127.0.0.1'),
@@ -32,27 +30,19 @@ const EnvSchema = z.object({
   TRADING_ENABLED: z.enum(['true', 'false']).default('false'),
   GIT_SHA: z.string().default('local'),
 });
-
 export type Environment = z.infer<typeof EnvSchema>;
-
 export function readEnvironment(input: Record<string, string | undefined>): Environment {
   const env = EnvSchema.parse(input);
-
-  if (env.ONEINCH_QUOTING_ENABLED === 'true' && !env.ONEINCH_API_KEY?.trim()) {
+  if (env.ONEINCH_QUOTING_ENABLED === 'true' && !env.ONEINCH_API_KEY?.trim())
     throw new NorthtrailError('INVALID_INPUT', 'Enabled 1inch quoting requires a server API key.');
-  }
-
-  if (env.UNISWAP_QUOTING_ENABLED === 'true' && !env.UNISWAP_API_KEY?.trim()) {
+  if (env.UNISWAP_QUOTING_ENABLED === 'true' && !env.UNISWAP_API_KEY?.trim())
     throw new NorthtrailError(
       'INVALID_INPUT',
       'Enabled quote acquisition requires a server Uniswap key.',
     );
-  }
-
   if (env.DATABASE_DRIVER === 'postgres' && !env.DATABASE_URL) {
     throw new NorthtrailError('INVALID_INPUT', 'DATABASE_URL is required for PostgreSQL.');
   }
-
   if (
     env.NODE_ENV === 'production' &&
     (env.DATABASE_DRIVER !== 'postgres' || !env.APP_ORIGIN.startsWith('https://'))
@@ -62,13 +52,11 @@ export function readEnvironment(input: Record<string, string | undefined>): Envi
       'Production requires PostgreSQL and an HTTPS application origin.',
     );
   }
-
   if (env.TRADING_ENABLED === 'true') {
     throw new NorthtrailError(
       'TRADING_DISABLED',
       'This foundation release does not enable financial execution.',
     );
   }
-
   return env;
 }

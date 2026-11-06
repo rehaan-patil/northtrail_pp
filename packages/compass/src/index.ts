@@ -12,10 +12,8 @@ export function stressExposure(
   if (!Number.isInteger(changeBps) || changeBps < -10_000 || changeBps > 100_000) {
     throw new NorthtrailError('INVALID_INPUT', 'Stress scenario is outside the supported range.');
   }
-
   const amount = rawAmount(amountRaw);
   const change = (amount * BigInt(changeBps)) / 10_000n;
-
   return {
     changeRaw: change.toString(),
     remainingRaw: (amount + change).toString(),
@@ -23,9 +21,8 @@ export function stressExposure(
     kind: 'SCENARIO_ARITHMETIC',
   };
 }
-
 export function gasPaid(gasUsed: string, effectiveGasPrice: string): string {
   return (rawAmount(gasUsed) * rawAmount(effectiveGasPrice)).toString();
 }
-
 export * from './routes.js';
+export * from './research.js';
