@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { z, ZodError } from 'zod';
+import { registerAgentPassRoutes } from './agent-pass-routes.js';
 import {
   IntentInputSchema,
   NorthtrailError,
@@ -344,6 +345,8 @@ export async function buildApp(
     },
   );
   registerAnalysisRoutes(app);
+  registerAnalysisRoutes(app);
+registerAgentPassRoutes(app);
   app.post(
     '/v1/proofs/receipt',
     { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } },

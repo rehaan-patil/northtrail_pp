@@ -7,3 +7,4 @@ export * from './quotes.js';
 export * from './assurance.js';
 export * from './research.js';
 export * from './proofs.js';
+export * from './agent-pass.js'; 

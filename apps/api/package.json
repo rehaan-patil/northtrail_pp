@@ -23,6 +23,7 @@
   "@fastify/rate-limit": "10.3.0",
   "zod": "4.6.7",
   "@electric-sql/pglite": "0.5.15",
-  "pg": "8.23.1"
+  "pg": "8.23.1",
+  "@northtrail/world-agent-pass": "workspace:*"
 }
 }
