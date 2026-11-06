@@ -17,12 +17,25 @@ import { stressExposure } from '@northtrail/compass';
 import { assertDatabaseReady, type Database } from '@northtrail/db';
 import { createUniswapQuoter, validateQuoteRequest } from '@northtrail/uniswap';
 import { createOneinchQuoter } from '@northtrail/oneinch';
+import { registerAnalysisRoutes } from './analysis-routes.js';
+import { createReceiptObserver } from '@northtrail/provider-http';
+import { ReceiptRequestSchema } from '@northtrail/domain';
 
 export async function buildApp(
   env: Environment,
   db: Database,
-  dependencies: { providerFetch?: typeof fetch; oneinchFetch?: typeof fetch } = {},
+  dependencies: {
+    providerFetch?: typeof fetch;
+    oneinchFetch?: typeof fetch;
+    rpcFetch?: typeof fetch;
+  } = {},
 ) {
+  const receipts = env.RPC_URL?.trim()
+    ? createReceiptObserver({
+        rpcUrl: env.RPC_URL,
+        ...(dependencies.rpcFetch ? { fetch: dependencies.rpcFetch } : {}),
+      })
+    : null;
   const quoter =
     env.UNISWAP_QUOTING_ENABLED === 'true' && env.UNISWAP_API_KEY
       ? createUniswapQuoter({
@@ -30,7 +43,6 @@ export async function buildApp(
           ...(dependencies.providerFetch ? { fetch: dependencies.providerFetch } : {}),
         })
       : null;
-
   const oneinch =
     env.ONEINCH_QUOTING_ENABLED === 'true' && env.ONEINCH_API_KEY
       ? createOneinchQuoter({
@@ -38,7 +50,6 @@ export async function buildApp(
           ...(dependencies.oneinchFetch ? { fetch: dependencies.oneinchFetch } : {}),
         })
       : null;
-
   const app = Fastify({
     bodyLimit: 65_536,
     requestTimeout: 15_000,
@@ -53,7 +64,6 @@ export async function buildApp(
           },
     logController: new LogController({ disableRequestLogging: true }),
   });
-
   await app.register(helmet);
   await app.register(cors, {
     origin: env.APP_ORIGIN,
@@ -61,51 +71,41 @@ export async function buildApp(
     methods: ['GET', 'POST'],
   });
   await app.register(rateLimit, { max: 60, timeWindow: '1 minute' });
-
   app.addHook('onSend', async (_req, reply) => {
     reply.header('Cache-Control', 'no-store');
   });
-
   app.setErrorHandler((error, request, reply) => {
-    const isKnown = error instanceof NorthtrailError;
-    const isValidation = error instanceof ZodError;
+    const known = error instanceof NorthtrailError;
+    const validation = error instanceof ZodError;
     const httpError = error as { statusCode?: number };
-
-    let status = 500;
-    if (isKnown) {
-      status = error.status;
-    } else if (isValidation) {
-      status = 400;
-    } else if (httpError.statusCode && httpError.statusCode < 500) {
-      status = httpError.statusCode;
-    }
-
-    let message = 'The request could not be completed.';
-    if (isKnown) {
-      message = error.message;
-    } else if (isValidation) {
-      message = 'Request does not match the expected schema.';
-    } else if (status < 500) {
-      message = 'Request rejected.';
-    }
-
-    if (status >= 500) {
+    const status = known
+      ? error.status
+      : validation
+        ? 400
+        : httpError.statusCode && httpError.statusCode < 500
+          ? httpError.statusCode
+          : 500;
+    const message = known
+      ? error.message
+      : validation
+        ? 'Request does not match the expected schema.'
+        : status === 500
+          ? 'The request could not be completed.'
+          : 'Request rejected.';
+    if (status >= 500)
       app.log.error(
-        { traceId: request.id, code: isKnown ? error.code : 'INTERNAL_ERROR' },
+        { traceId: request.id, code: known ? error.code : 'INTERNAL_ERROR' },
         'Request failed',
       );
-    }
-
     return reply.status(status).send({
       error: {
-        code: isKnown ? error.code : status < 500 ? 'INVALID_INPUT' : 'INTERNAL_ERROR',
+        code: known ? error.code : status < 500 ? 'INVALID_INPUT' : 'INTERNAL_ERROR',
         message,
-        nextAction: isKnown ? error.nextAction : 'Check the request or retry later.',
+        nextAction: known ? error.nextAction : 'Check the request or retry later.',
         traceId: request.id,
       },
     });
   });
-
   app.setNotFoundHandler((request, reply) =>
     reply.status(404).send({
       error: {
@@ -117,12 +117,7 @@ export async function buildApp(
     }),
   );
 
-  app.get('/health/live', async () => ({
-    status: 'ok',
-    version: '0.1.0',
-    commit: env.GIT_SHA,
-  }));
-
+  app.get('/health/live', async () => ({ status: 'ok', version: '0.1.0', commit: env.GIT_SHA }));
   app.get('/health/ready', async (_request, reply) => {
     try {
       await assertDatabaseReady(db);
@@ -131,7 +126,6 @@ export async function buildApp(
       return reply.status(503).send({ status: 'unavailable', database: db.driver });
     }
   });
-
   app.get('/v1/status', async () =>
     SystemStatusSchema.parse({
       schemaVersion: '1',
@@ -176,16 +170,34 @@ export async function buildApp(
         {
           id: 'proof',
           label: 'Trade Proof',
-          available: false,
-          status: 'SPECIFIED_NOT_IMPLEMENTED',
-          reason: 'No confirmed transaction has been independently reconciled.',
+          available: receipts !== null,
+          status: 'IMPLEMENTED_NOT_VERIFIED',
+          reason:
+            'Read-only RPC receipt, canonical-block recheck and exact gas observation implemented. Token settlement, allowances and finality remain unverified.',
         },
         {
           id: 'risk',
           label: 'Risk Lens',
-          available: false,
-          status: 'SPECIFIED_NOT_IMPLEMENTED',
-          reason: 'No rights-approved historical dataset is loaded.',
+          available: true,
+          status: 'TESTED_SIMULATION',
+          reason:
+            'Descriptive analysis of supplied OHLCV with availability and gap checks. No verified historical feed or predictive model.',
+        },
+        {
+          id: 'chronos',
+          label: 'Chronos budget research',
+          available: true,
+          status: 'TESTED_SIMULATION',
+          reason:
+            'Exact tranche and gas budget arithmetic. Strategy recommendations abstain without validated execution counterfactuals.',
+        },
+        {
+          id: 'guard-review',
+          label: 'Decision review & Safe Paths',
+          available: true,
+          status: 'TESTED_SIMULATION',
+          reason:
+            'Decision/quote consistency and conservative recovery guidance. No wallet authentication or swap authorization.',
         },
         {
           id: 'outlook',
@@ -218,46 +230,37 @@ export async function buildApp(
       ],
     }),
   );
-
   app.get('/v1/assets', async () => ({
     assets: [USDC, WETH],
     chainId: 1,
     verification: 'REGISTRY_ONLY',
     tradingEnabled: false,
   }));
-
   app.post('/v1/intents/validate', async (request) => {
     const intent = IntentInputSchema.parse(request.body);
-    if (intent.chainId !== 1) {
+    if (intent.chainId !== 1)
       throw new NorthtrailError(
         'UNSUPPORTED_CHAIN',
         'Only Ethereum is a candidate in this release.',
       );
-    }
-
-    const matchesRegistry =
-      intent.tokenIn.address === USDC.address &&
-      intent.tokenOut.address === WETH.address &&
-      intent.tokenIn.decimals === 6 &&
-      intent.tokenOut.decimals === 18 &&
-      intent.tokenIn.symbol === 'USDC' &&
-      intent.tokenOut.symbol === 'WETH';
-
-    if (!matchesRegistry) {
+    if (
+      intent.tokenIn.address !== USDC.address ||
+      intent.tokenOut.address !== WETH.address ||
+      intent.tokenIn.decimals !== 6 ||
+      intent.tokenOut.decimals !== 18 ||
+      intent.tokenIn.symbol !== 'USDC' ||
+      intent.tokenOut.symbol !== 'WETH'
+    ) {
       throw new NorthtrailError(
         'UNSUPPORTED_TOKEN',
         'Asset identity does not match the configured USDC/WETH registry.',
       );
     }
-
     const expiresIn = Date.parse(intent.deadline) - Date.now();
-    if (expiresIn <= 0 || expiresIn > 30 * 60_000) {
+    if (expiresIn <= 0 || expiresIn > 30 * 60_000)
       throw new NorthtrailError('INVALID_INPUT', 'Deadline must be within the next 30 minutes.');
-    }
-
     return { valid: true, intent, spendAuthorized: false };
   });
-
   app.post('/v1/compass/scenario', async (request) => {
     const input = z
       .strictObject({
@@ -265,10 +268,8 @@ export async function buildApp(
         changeBps: z.number().int().min(-10_000).max(100_000),
       })
       .parse(request.body);
-
     return stressExposure(input.amountRaw, input.changeBps);
   });
-
   app.post('/v1/decisions/verify', async (request) => {
     const input = z.strictObject({ record: z.unknown() }).parse(request.body);
     return {
@@ -276,7 +277,6 @@ export async function buildApp(
       meaning: 'Digest consistency only; not source truth, wallet consent or chain settlement.',
     };
   });
-
   app.post('/v1/trades', async () => {
     throw new NorthtrailError(
       'TRADING_DISABLED',
@@ -285,34 +285,28 @@ export async function buildApp(
       'Wait for the verified wallet and execution integration.',
     );
   });
-
   app.post(
     '/v1/quotes/uniswap',
     { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } },
     async (request) => {
       const input = validateQuoteRequest(request.body);
-      if (!quoter) {
+      if (!quoter)
         throw new NorthtrailError(
           'PROVIDER_UNAVAILABLE',
           'Server quote acquisition is not configured.',
           503,
           'Configure a server Uniswap key and explicitly enable read-only quoting.',
         );
-      }
       return quoter.quote(input);
     },
   );
-
   app.post(
     '/v1/quotes/benchmark',
     { config: { rateLimit: { max: 3, timeWindow: '1 minute' } } },
     async (request) => {
       const input = validateQuoteRequest(request.body);
-
       async function observe<T>(provider: { quote(input: unknown): Promise<T> } | null) {
-        if (!provider) {
-          return { ok: false as const, code: 'NOT_CONFIGURED' };
-        }
+        if (!provider) return { ok: false as const, code: 'NOT_CONFIGURED' };
         try {
           return { ok: true as const, observation: await provider.quote(input) };
         } catch (error) {
@@ -322,16 +316,17 @@ export async function buildApp(
             'PROVIDER_RATE_LIMITED',
             'QUOTE_STALE',
           ];
-          const code =
-            error instanceof NorthtrailError && allowed.includes(error.code)
-              ? error.code
-              : 'PROVIDER_UNAVAILABLE';
-          return { ok: false as const, code };
+          return {
+            ok: false as const,
+            code:
+              error instanceof NorthtrailError && allowed.includes(error.code)
+                ? error.code
+                : 'PROVIDER_UNAVAILABLE',
+          };
         }
       }
-
+      // Independent read-only requests, with each failure retained. Shared adapters retain their quotas.
       const [native, aggregator] = await Promise.all([observe(quoter), observe(oneinch)]);
-
       return QuoteBenchmarkSchema.parse({
         schemaVersion: '1',
         kind: 'QUOTE_BENCHMARK',
@@ -348,6 +343,20 @@ export async function buildApp(
       });
     },
   );
-
+  registerAnalysisRoutes(app);
+  app.post(
+    '/v1/proofs/receipt',
+    { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } },
+    async (request) => {
+      const input = ReceiptRequestSchema.parse(request.body);
+      if (!receipts)
+        throw new NorthtrailError(
+          'PROVIDER_UNAVAILABLE',
+          'Server RPC observation is not configured.',
+          503,
+        );
+      return receipts.observe(input);
+    },
+  );
   return app;
 }
