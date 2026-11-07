@@ -53,6 +53,104 @@ The platform is organized around five connected capabilities.
 
 These components form the foundation of Northtrail. Advanced liquidity research and machine learning extend their capabilities rather than replacing them.
 
+---
+
+## 🚀 Quickstart & Demonstration Guide
+
+### Live Production Deployment
+- **Interactive Workspace (Frontend):** [https://northtrail-pp.vercel.app](https://northtrail-pp.vercel.app)
+- **Typed REST API (Backend):** [https://northtrailpp-production.up.railway.app](https://northtrailpp-production.up.railway.app)
+- **Health Check Endpoint:** [https://northtrail-pp.vercel.app/health](https://northtrail-pp.vercel.app/health)
+- **Verified Capabilities:** [https://northtrail-pp.vercel.app/v1/status](https://northtrail-pp.vercel.app/v1/status)
+
+---
+
+### Running Locally on Your Machine From Scratch
+
+#### Prerequisites
+- **Node.js**: v24.0.0 or higher (`node -v`)
+- **Git**: installed (`git --version`)
+- **Corepack**: built into Node (`corepack enable`)
+
+#### 1. Clone & Enter Repository
+```bash
+git clone https://github.com/rehaan-patil/northtrail_pp.git
+cd northtrail_pp
+```
+
+#### 2. Install Dependencies
+```bash
+corepack enable
+corepack pnpm install
+```
+
+#### 3. Build SDK Bundle
+Compile `@northtrail/sdk` (includes domain schemas, 1inch Aqua coverage inspector, and Chronos quant models):
+```bash
+corepack pnpm --filter @northtrail/sdk build
+```
+
+#### 4. Run Automated Test Verification
+Run the 207-test test suite across all 13 test suites:
+```bash
+corepack pnpm test
+```
+*Expected result: 13 passed (13 test files), 207 passed (207 tests).*
+
+#### 5. Start Development Servers
+Start both the Fastify API server and Next.js frontend concurrently:
+```bash
+corepack pnpm dev
+```
+- **Next.js Web UI**: `http://localhost:3000` (or `http://127.0.0.1:3000`)
+- **Fastify API Server**: `http://127.0.0.1:4000`
+
+#### 6. Run External SDK Consumer (Terminal Verification)
+In a separate terminal, test the standalone developer SDK querying the live deployment:
+```bash
+corepack pnpm demo
+```
+*Outputs the RFC 8785 canonical decision digest and reports `locallyValid: true` and `valid: true`.*
+
+---
+
+### UI Demonstration Walkthrough (What to Click & Show)
+
+Open `http://localhost:3000` (or `https://northtrail-pp.vercel.app`):
+
+1. **Trade Workbench (`/`)**:
+   - Notice the green badge `Edge Engine Active` or `API connected`.
+   - Enter `2500` in **Trade Amount** and `+5.00%` in **Simulate price shock** → Click **Calculate shock** to demonstrate integer token arithmetic.
+   - Click **Request Fresh Quote** to view real-time Uniswap v3 fee-500 quotes with 50 bps slippage bounds.
+   - Toggle to **1inch Benchmark** to observe dual-provider comparison.
+
+2. **Curve Atlas (Liquidity Frontier)**:
+   - Click **Curve Atlas** in the left sidebar navigation.
+   - Drag the slider from `$500` to `$100,000` to demonstrate the trade-size frontier.
+   - Point out the **Crossover Intervals**: Uniswap 0.05% wins below \$18.5k, Uniswap 0.30% wins between \$18.5k–\$45k, and 1inch Pathfinder wins above \$45k.
+   - Click **Apply Optimal Venue to Workbench**.
+
+3. **Chronos Execution Planner**:
+   - Click **Chronos Planner** in the sidebar.
+   - Compare **NOW** (immediate), **SPLIT** (staged TWAP), and **WAIT** (volatility cooloff).
+   - Change order size to `$50,000` and tranches to `3` to reveal the 95% CVaR tail risk reduction.
+
+4. **Aqua Adaptive Maker Studio (1inch Protocol)**:
+   - Click **Aqua Maker** in the sidebar.
+   - Show the official 1inch Aqua and SwapVM contract addresses.
+   - Demonstrate the **Live Capital Coverage Monitor** (`inspectAquaCoverage`) showing 100% healthy coverage.
+   - Click through **Ship Strategy** → **Simulate SwapVM Fill** → **Dock Strategy**.
+
+5. **Universe Risk Explorer**:
+   - Click **Universe Explorer** in the sidebar.
+   - Select **WETH**, **WBTC**, **DAI**, and **UNI** to display annualized realized vol, EWMA vol, 24h drawdown, and 95% Value-at-Risk.
+
+6. **Cryptographic Decision Trail & Trade Proof**:
+   - Return to the Workbench and click **Verify Canonical Digest** on the RFC 8785 payload.
+   - Under **Trade Proof**, click **Observe chain receipt** to demonstrate on-chain receipt observation with strict separation from final token settlement.
+
+---
+
 ## Current implementation
 
 The repository currently focuses on the mathematical, storage, API and developer-facing foundation.
