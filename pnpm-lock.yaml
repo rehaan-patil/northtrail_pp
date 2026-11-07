@@ -391,6 +391,19 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
+  packages/wallet-embed:
+    dependencies:
+      '@northtrail/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+    devDependencies:
+      tsup:
+        specifier: 9.0.0
+        version: 9.0.0(postcss@8.5.32)(tsx@4.23.15)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':

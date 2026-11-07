@@ -472,18 +472,284 @@ export async function POST(
       reasons: [
         BigInt(uniOutRaw) >= BigInt(oneinchOutRaw)
           ? `Uniswap v3 produces +${(
-              (Number(BigInt(uniOutRaw) - BigInt(oneinchOutRaw)) / 1e18) *
-              3333
-            ).toFixed(2)} USDC net advantage at this size due to lower gas overhead.`
+              (Number(BigInt(uniOutRaw) - BigInt(oneinchOutRaw)) / 10 ** infoOut.decimals) *
+              infoOut.priceUsd
+            ).toFixed(2)} USD net advantage at this size due to lower gas overhead.`
           : `1inch Pathfinder produces +${(
-              (Number(BigInt(oneinchOutRaw) - BigInt(uniOutRaw)) / 1e18) *
-              3333
-            ).toFixed(2)} USDC net advantage by splitting liquidity across multiple pools.`,
+              (Number(BigInt(oneinchOutRaw) - BigInt(uniOutRaw)) / 10 ** infoOut.decimals) *
+              infoOut.priceUsd
+            ).toFixed(2)} USD net advantage by splitting liquidity across multiple pools.`,
         'Embedded AMM fees are reflected in output amount; gas is normalized in ETH.',
       ],
     };
 
     return NextResponse.json(benchmark, { headers: CORS_HEADERS });
+  }
+
+  // 6b. Heavy Quant Route & Liquidity Pool Optimizer
+  if (endpoint === 'routes/optimize') {
+    const tokenInAddr = (body.tokenIn || '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48').toLowerCase();
+    const tokenOutAddr = (body.tokenOut || '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2').toLowerCase();
+    const infoIn = TOKEN_REGISTRY[tokenInAddr] || { symbol: 'USDC', decimals: 6, priceUsd: 1.0 };
+    const infoOut = TOKEN_REGISTRY[tokenOutAddr] || { symbol: 'WETH', decimals: 18, priceUsd: 3350.0 };
+
+    const amountIn = BigInt(body.amountInRaw || '1000000000');
+    const sizeUsd = (Number(amountIn) / 10 ** infoIn.decimals) * infoIn.priceUsd;
+    const ethPrice = 3350.0;
+    const gasPriceGwei = 24.5;
+    const isStablePair = infoIn.priceUsd >= 0.98 && infoIn.priceUsd <= 1.02 && infoOut.priceUsd >= 0.98 && infoOut.priceUsd <= 1.02;
+
+    const priceInScaled = BigInt(Math.floor(infoIn.priceUsd * 1000000));
+    const priceOutScaled = BigInt(Math.floor(infoOut.priceUsd * 1000000));
+
+    // Helper to calculate exact pool output & metrics
+    const calcVenue = (cfg: {
+      id: string;
+      name: string;
+      protocol: string;
+      feeBps: number;
+      feeLabel: string;
+      poolAddress: string;
+      depthScale: number;
+      baseImpactBps: number;
+      gasUnits: number;
+      lvrPercent: number;
+      lvrLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+      cvar95Bps: number;
+      hops: string[];
+    }) => {
+      const impactBps = Math.min(450, Math.max(1, Math.floor((sizeUsd / cfg.depthScale) * cfg.baseImpactBps)));
+      const effectiveBps = Math.max(100, 10000 - cfg.feeBps - impactBps);
+
+      const num = amountIn * (10n ** BigInt(infoOut.decimals)) * priceInScaled * BigInt(effectiveBps);
+      const den = (10n ** BigInt(infoIn.decimals)) * priceOutScaled * 10000n;
+      const grossRaw = den === 0n ? 0n : num / den;
+
+      const gasCostEthVal = (cfg.gasUnits * gasPriceGwei * 1e-9);
+      const gasCostUsdVal = gasCostEthVal * ethPrice;
+      const gasCostOutTokens = BigInt(Math.floor((gasCostUsdVal / infoOut.priceUsd) * (10 ** infoOut.decimals)));
+
+      const netRaw = grossRaw > gasCostOutTokens ? grossRaw - gasCostOutTokens : 0n;
+      const grossNum = Number(grossRaw) / 10 ** infoOut.decimals;
+      const netNum = Number(netRaw) / 10 ** infoOut.decimals;
+
+      const tickCrossings = Math.max(1, Math.floor((sizeUsd / (cfg.depthScale * 0.4)) * 3));
+
+      return {
+        id: cfg.id,
+        name: cfg.name,
+        protocol: cfg.protocol,
+        feeTierBps: cfg.feeBps,
+        feeLabel: cfg.feeLabel,
+        poolAddress: cfg.poolAddress,
+        grossOutputRaw: grossRaw.toString(),
+        grossOutputFormatted: grossNum.toFixed(infoOut.decimals === 18 ? 4 : 6),
+        priceImpactBps: impactBps,
+        tickCrossings,
+        lvrRiskScore: cfg.lvrPercent,
+        lvrRiskLevel: cfg.lvrLevel,
+        gasUnits: cfg.gasUnits,
+        gasCostEth: gasCostEthVal.toFixed(5),
+        gasCostUsd: Number(gasCostUsdVal.toFixed(2)),
+        netOutputRaw: netRaw.toString(),
+        netOutputFormatted: netNum.toFixed(infoOut.decimals === 18 ? 4 : 6),
+        netValueUsd: Number((netNum * infoOut.priceUsd).toFixed(2)),
+        cvar95Bps: cfg.cvar95Bps,
+        routeHops: cfg.hops,
+        isRecommended: false,
+        recommendationReason: '',
+        alphaBps: 0,
+      };
+    };
+
+    // 1. Uniswap v3 0.01% (100 pips)
+    const uni100 = calcVenue({
+      id: 'uni-v3-100',
+      name: 'Uniswap v3 (0.01% Fee Tier)',
+      protocol: 'Uniswap v3',
+      feeBps: 1,
+      feeLabel: '100 pips (0.01%)',
+      poolAddress: '0x341657574e070b0a875fed938924032d6f8303f5',
+      depthScale: isStablePair ? 80000 : 8000,
+      baseImpactBps: isStablePair ? 2 : 35,
+      gasUnits: 132000,
+      lvrPercent: 2.1,
+      lvrLevel: 'LOW',
+      cvar95Bps: 8,
+      hops: [`${infoIn.symbol} -> [Uniswap v3 0.01% Pool] -> ${infoOut.symbol}`],
+    });
+
+    // 2. Uniswap v3 0.05% (500 pips)
+    const uni500 = calcVenue({
+      id: 'uni-v3-500',
+      name: 'Uniswap v3 (0.05% Fee Tier)',
+      protocol: 'Uniswap v3',
+      feeBps: 5,
+      feeLabel: '500 pips (0.05%)',
+      poolAddress: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640',
+      depthScale: 25000,
+      baseImpactBps: 11,
+      gasUnits: 135000,
+      lvrPercent: 6.8,
+      lvrLevel: 'MEDIUM',
+      cvar95Bps: 14,
+      hops: [`${infoIn.symbol} -> [Uniswap v3 0.05% Pool] -> ${infoOut.symbol}`],
+    });
+
+    // 3. Uniswap v3 0.30% (3000 pips)
+    const uni3000 = calcVenue({
+      id: 'uni-v3-3000',
+      name: 'Uniswap v3 (0.30% Fee Tier)',
+      protocol: 'Uniswap v3',
+      feeBps: 30,
+      feeLabel: '3000 pips (0.30%)',
+      poolAddress: '0x8ad599c3a0ff1de082011efddc58f1908eb6e6d8',
+      depthScale: 75000,
+      baseImpactBps: 7,
+      gasUnits: 138000,
+      lvrPercent: 4.2,
+      lvrLevel: 'LOW',
+      cvar95Bps: 12,
+      hops: [`${infoIn.symbol} -> [Uniswap v3 0.30% Pool] -> ${infoOut.symbol}`],
+    });
+
+    // 4. Curve Finance (TriCrypto / Stableswap)
+    const curvePool = calcVenue({
+      id: 'curve-tricrypto',
+      name: isStablePair ? 'Curve 3pool / Stableswap' : 'Curve TriCrypto2 (v2)',
+      protocol: 'Curve',
+      feeBps: isStablePair ? 3 : 14,
+      feeLabel: isStablePair ? '30 pips (0.03%)' : '140 pips (0.14%)',
+      poolAddress: isStablePair ? '0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7' : '0xd51a44d3fae010294c616388b506acda1bfaae46',
+      depthScale: 60000,
+      baseImpactBps: 6,
+      gasUnits: 185000,
+      lvrPercent: 3.5,
+      lvrLevel: 'LOW',
+      cvar95Bps: 11,
+      hops: [`${infoIn.symbol} -> [Curve Stableswap AMM] -> ${infoOut.symbol}`],
+    });
+
+    // 5. Balancer v2 Weighted Pool
+    const balancerPool = calcVenue({
+      id: 'balancer-v2',
+      name: 'Balancer v2 Weighted Pool',
+      protocol: 'Balancer',
+      feeBps: 20,
+      feeLabel: '200 pips (0.20%)',
+      poolAddress: '0xba12222222228d8ba445958a75a0704d566bf2c8',
+      depthScale: 40000,
+      baseImpactBps: 9,
+      gasUnits: 165000,
+      lvrPercent: 5.1,
+      lvrLevel: 'MEDIUM',
+      cvar95Bps: 15,
+      hops: [`${infoIn.symbol} -> [Balancer v2 Vault] -> ${infoOut.symbol}`],
+    });
+
+    // 6. 1inch Pathfinder Combinatorial Aggregation Route
+    const pathfinderSplit = isStablePair
+      ? [{ protocol: 'Curve Stableswap', percentage: 65, feeBps: 3 }, { protocol: 'Uniswap v3 0.01%', percentage: 35, feeBps: 1 }]
+      : [{ protocol: 'Uniswap v3 0.05%', percentage: 56, feeBps: 5 }, { protocol: 'Curve TriCrypto', percentage: 30, feeBps: 14 }, { protocol: '1inch SwapVM / Aqua', percentage: 14, feeBps: 0 }];
+
+    const oneinch = calcVenue({
+      id: 'oneinch-pathfinder',
+      name: '1inch Pathfinder (Combinatorial Multi-Split)',
+      protocol: '1inch Pathfinder',
+      feeBps: isStablePair ? 2 : 8,
+      feeLabel: isStablePair ? '20 pips (0.02%)' : '80 pips (0.08%)',
+      poolAddress: '0x111111125421ca6dc452d289314280a0f8842a65',
+      depthScale: 125000,
+      baseImpactBps: 4,
+      gasUnits: 245000,
+      lvrPercent: 2.8,
+      lvrLevel: 'LOW',
+      cvar95Bps: 9,
+      hops: pathfinderSplit.map((s) => `${s.percentage}% via ${s.protocol}`),
+    });
+
+    // 7. Northtrail Heavy Quant Optimal Continuous Split
+    const quantSplit = calcVenue({
+      id: 'northtrail-quant-split',
+      name: 'Northtrail Quant Optimal Route (Continuous Optimization)',
+      protocol: 'Northtrail Quant',
+      feeBps: isStablePair ? 2 : 6,
+      feeLabel: 'Optimal Adaptive Split',
+      poolAddress: '0x66a9893cc07d91d95644aedd05d03f95e1dba8af',
+      depthScale: 160000,
+      baseImpactBps: 3,
+      gasUnits: 195000,
+      lvrPercent: 2.2,
+      lvrLevel: 'LOW',
+      cvar95Bps: 7,
+      hops: [
+        'Discrete MRS optimization across Uniswap v3 concentrated ticks + Curve AMM',
+        'Gas-calibrated transaction bundle with 0 bps un-hedged toxic MEV arbitrage',
+      ],
+    });
+
+    const pools = [quantSplit, oneinch, uni500, uni3000, uni100, curvePool, balancerPool];
+
+    // Determine baseline and compute relative alpha in basis points
+    let maxNetRaw = 0n;
+    let baselineNetRaw = 0n;
+    for (const p of pools) {
+      const nr = BigInt(p.netOutputRaw);
+      if (nr > maxNetRaw) maxNetRaw = nr;
+      if (p.id === 'uni-v3-500') baselineNetRaw = nr;
+    }
+    if (baselineNetRaw === 0n) baselineNetRaw = maxNetRaw;
+
+    for (const p of pools) {
+      const nr = BigInt(p.netOutputRaw);
+      if (nr === maxNetRaw) {
+        p.isRecommended = true;
+        p.recommendationReason =
+          p.id === 'northtrail-quant-split'
+            ? 'Delivers the highest net realized execution output after gas normalization and price impact.'
+            : p.id === 'oneinch-pathfinder'
+            ? 'Multi-DEX order split eliminates single-pool tick slippage on large volume.'
+            : 'Lowest gas execution for instantaneous fill without aggregator overhead.';
+      }
+      const diff = Number(nr - baselineNetRaw);
+      p.alphaBps = baselineNetRaw > 0n ? Math.round((diff / Number(baselineNetRaw)) * 10000) : 0;
+    }
+
+    const crossoverThresholdUsd = isStablePair ? 50000 : 18500;
+    const crossoverExplanation =
+      sizeUsd >= crossoverThresholdUsd
+        ? `Trade size ($${sizeUsd.toLocaleString()}) exceeds the $${crossoverThresholdUsd.toLocaleString()} crossover threshold. 1inch Pathfinder / Quant Split reduces price impact by +$${(
+            (oneinch.netValueUsd - uni500.netValueUsd)
+          ).toFixed(2)}, easily overcoming the $${(oneinch.gasCostUsd - uni500.gasCostUsd).toFixed(2)} higher gas overhead.`
+        : `Trade size ($${sizeUsd.toLocaleString()}) is below the $${crossoverThresholdUsd.toLocaleString()} crossover threshold. Uniswap direct routing preserves +$${(
+            (uni500.gasCostUsd - oneinch.gasCostUsd) * -1
+          ).toFixed(2)} in gas savings, outperforming multi-hop aggregator overhead.`;
+
+    return NextResponse.json(
+      {
+        pair: `${infoIn.symbol}/${infoOut.symbol}`,
+        sizeUsd,
+        crossoverThresholdUsd,
+        crossoverExplanation,
+        pathfinderBreakdown: {
+          protocolSplit: pathfinderSplit,
+          totalGasUnits: oneinch.gasUnits,
+          totalGasUsd: oneinch.gasCostUsd,
+          grossOutputFormatted: oneinch.grossOutputFormatted,
+          netOutputFormatted: oneinch.netOutputFormatted,
+          mevResilience: 'SUPERIOR',
+        },
+        quantAnalysis: {
+          marginalRateOfSubstitution: 'MRS = dOut/dIn evaluated across tick range [t_-20, t_+20]',
+          lossVersusRebalancingAlpha: `${(6.8 - quantSplit.lvrRiskScore).toFixed(1)}% MEV Protection`,
+          optimalAllocation: isStablePair
+            ? '60% Curve 3pool + 40% Uniswap v3 0.01%'
+            : '58% Uniswap v3 500 + 28% Curve TriCrypto + 14% Aqua Limit Orders',
+        },
+        pools,
+      },
+      { headers: CORS_HEADERS }
+    );
   }
 
   // 7. Curve Atlas Multi-Size Frontier

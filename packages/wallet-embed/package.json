@@ -1,0 +1,30 @@
+{
+  "name": "@northtrail/wallet-embed",
+  "version": "0.1.0",
+  "description": "Open-source embedded wallet assurance SDK for Wagmi, Viem, and EIP-1193 providers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ethereum",
+    "wallet",
+    "wagmi",
+    "viem",
+    "defi",
+    "mev-protection",
+    "slippage-guard"
+  ],
+  "author": "Northtrail Protocol",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@northtrail/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "tsup": "9.0.0"
+  }
+}
