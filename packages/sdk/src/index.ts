@@ -46,9 +46,16 @@ export {
   type MarketDataset,
   type RiskReport,
   type ExecutionBudgetRequest,
+  reviewDecisionQuote,
+  safeRecovery,
 } from '../../domain/src/index.js';
 export { inspectAquaCoverage, type AquaCoverageReport } from '../../aqua/src/index.js';
-export { stressExposure, gasPaid } from '../../compass/src/index.js';
+export {
+  stressExposure,
+  gasPaid,
+  planExecutionBudget,
+  analyzeHistoricalRisk,
+} from '../../compass/src/index.js';
 
 export function createNorthtrail(options: {
   baseUrl: string;
