@@ -41,3 +41,4 @@
 |---|---|---|---|---|
 | **AgentBook Registry** | AgentBook Mandate Schema | World Chain (`eip155:480`) | Daily spending cap enforcement (e.g. 300 USDC) | Requests exceeding daily budget require fresh World ID Orb verification pass. |
 | **World ID Nullifier** | Dev Portal v2 / Simulator | World ID Protocol | Single-use anti-replay token | Nullifiers are tracked in-memory to prevent replay attacks; expires automatically after challenge window. |
+
