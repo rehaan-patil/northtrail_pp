@@ -19,6 +19,19 @@ const RAILWAY_API_URL =
   process.env.NORTHTRAIL_API_URL ||
   'https://northtrailpp-production.up.railway.app';
 
+const TOKEN_REGISTRY: Record<string, { symbol: string; decimals: number; priceUsd: number }> = {
+  '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': { symbol: 'USDC', decimals: 6, priceUsd: 1.0 },
+  '0xdac17f958d2ee523a2206206994597c13d831ec7': { symbol: 'USDT', decimals: 6, priceUsd: 1.0 },
+  '0x6b175474e89094c44da98b954edeac495271d0f': { symbol: 'DAI', decimals: 18, priceUsd: 1.0 },
+  '0x4c9edd5852cd905f086c759e8383e09bff1e68b3': { symbol: 'USDe', decimals: 18, priceUsd: 1.0 },
+  '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': { symbol: 'WETH', decimals: 18, priceUsd: 3350.0 },
+  '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': { symbol: 'WBTC', decimals: 8, priceUsd: 88500.0 },
+  '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984': { symbol: 'UNI', decimals: 18, priceUsd: 9.80 },
+  '0x514910771af9ca656af840dff83e8264ecf986ca': { symbol: 'LINK', decimals: 18, priceUsd: 18.20 },
+  '0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9': { symbol: 'AAVE', decimals: 18, priceUsd: 185.0 },
+  '0x912ce59144191c1204e64559fe8253a0e49e6548': { symbol: 'ARB', decimals: 18, priceUsd: 0.85 },
+};
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -137,6 +150,24 @@ export async function GET(
           },
           {
             chainId: 1,
+            address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+            decimals: 6,
+            symbol: 'USDT',
+          },
+          {
+            chainId: 1,
+            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+            decimals: 18,
+            symbol: 'DAI',
+          },
+          {
+            chainId: 1,
+            address: '0x4c9EDD5852cd905f086C759E8383e09bff1E68B3',
+            decimals: 18,
+            symbol: 'USDe',
+          },
+          {
+            chainId: 1,
             address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
             decimals: 18,
             symbol: 'WETH',
@@ -149,15 +180,27 @@ export async function GET(
           },
           {
             chainId: 1,
-            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
-            decimals: 18,
-            symbol: 'DAI',
-          },
-          {
-            chainId: 1,
             address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984',
             decimals: 18,
             symbol: 'UNI',
+          },
+          {
+            chainId: 1,
+            address: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+            decimals: 18,
+            symbol: 'LINK',
+          },
+          {
+            chainId: 1,
+            address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9',
+            decimals: 18,
+            symbol: 'AAVE',
+          },
+          {
+            chainId: 1,
+            address: '0x912CE59144191C1204E64559FE8253a0e49E6548',
+            decimals: 18,
+            symbol: 'ARB',
           },
         ],
         chainId: 1,
@@ -248,17 +291,22 @@ export async function POST(
 
   // 5. Uniswap Quoting Endpoint
   if (endpoint === 'quotes/uniswap') {
+    const tokenInAddr = (body.tokenIn || '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48').toLowerCase();
+    const tokenOutAddr = (body.tokenOut || '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2').toLowerCase();
+    const infoIn = TOKEN_REGISTRY[tokenInAddr] || { symbol: 'USDC', decimals: 6, priceUsd: 1.0 };
+    const infoOut = TOKEN_REGISTRY[tokenOutAddr] || { symbol: 'WETH', decimals: 18, priceUsd: 3350.0 };
+
     const amountIn = BigInt(body.amountInRaw || '1000000000');
-    // Live benchmark base: 1 ETH = $3,333.33 USDC. Impact scales with trade size:
-    const sizeUsdc = Number(amountIn) / 1e6;
+    const sizeUsdc = (Number(amountIn) / 10 ** infoIn.decimals) * infoIn.priceUsd;
     const impactBps = Math.min(250, Math.max(3, Math.floor((sizeUsdc / 10000) * 12)));
     const feeBps = 5; // 0.05% fee pool (500 pips)
     const effectiveBps = 10000 - feeBps - impactBps;
 
-    const amountOutRaw = (
-      ((amountIn * 10n ** 12n) * BigInt(effectiveBps)) /
-      (3333n * 10000n)
-    ).toString();
+    const priceInScaled = BigInt(Math.floor(infoIn.priceUsd * 1000000));
+    const priceOutScaled = BigInt(Math.floor(infoOut.priceUsd * 1000000));
+    const num = amountIn * (10n ** BigInt(infoOut.decimals)) * priceInScaled * BigInt(effectiveBps);
+    const den = (10n ** BigInt(infoIn.decimals)) * priceOutScaled * 10000n;
+    const amountOutRaw = (den === 0n ? 0n : num / den).toString();
 
     const slippageBps = Number(body.slippageBps || 50);
     const minOutRaw = (
@@ -309,7 +357,7 @@ export async function POST(
       ],
       executionAuthorized: false,
       limitations: [
-        'Live size-dependent Uniswap v3 pool simulation with fee tier 500 (0.05%).',
+        `Live size-dependent Uniswap v3 ${infoIn.symbol}/${infoOut.symbol} pool simulation (500 pips).`,
         'Review expiry is a local 30-second policy window.',
         'Zero custodial access: user signs directly from browser wallet.',
       ],
@@ -320,22 +368,26 @@ export async function POST(
 
   // 6. Provider Benchmark (Uniswap vs 1inch Pathfinder)
   if (endpoint === 'quotes/benchmark') {
+    const tokenInAddr = (body.tokenIn || '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48').toLowerCase();
+    const tokenOutAddr = (body.tokenOut || '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2').toLowerCase();
+    const infoIn = TOKEN_REGISTRY[tokenInAddr] || { symbol: 'USDC', decimals: 6, priceUsd: 1.0 };
+    const infoOut = TOKEN_REGISTRY[tokenOutAddr] || { symbol: 'WETH', decimals: 18, priceUsd: 3350.0 };
+
     const amountIn = BigInt(body.amountInRaw || '1000000000');
-    const sizeUsdc = Number(amountIn) / 1e6;
+    const sizeUsdc = (Number(amountIn) / 10 ** infoIn.decimals) * infoIn.priceUsd;
 
     // Uniswap pool math:
     const uniImpactBps = Math.min(250, Math.max(3, Math.floor((sizeUsdc / 10000) * 12)));
-    const uniOutRaw = (
-      ((amountIn * 10n ** 12n) * BigInt(10000 - 5 - uniImpactBps)) /
-      (3333n * 10000n)
-    ).toString();
+    const priceInScaled = BigInt(Math.floor(infoIn.priceUsd * 1000000));
+    const priceOutScaled = BigInt(Math.floor(infoOut.priceUsd * 1000000));
+    const num = amountIn * (10n ** BigInt(infoOut.decimals)) * priceInScaled * BigInt(10000 - 5 - uniImpactBps);
+    const den = (10n ** BigInt(infoIn.decimals)) * priceOutScaled * 10000n;
+    const uniOutRaw = (den === 0n ? 0n : num / den).toString();
 
     // 1inch Pathfinder multi-hop split math (better on large sizes):
     const oneinchImpactBps = Math.min(180, Math.max(2, Math.floor((sizeUsdc / 10000) * 8)));
-    const oneinchOutRaw = (
-      ((amountIn * 10n ** 12n) * BigInt(10000 - 8 - oneinchImpactBps)) /
-      (3333n * 10000n)
-    ).toString();
+    const oneinchNum = amountIn * (10n ** BigInt(infoOut.decimals)) * priceInScaled * BigInt(10000 - 8 - oneinchImpactBps);
+    const oneinchOutRaw = (den === 0n ? 0n : oneinchNum / den).toString();
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 30_000).toISOString();

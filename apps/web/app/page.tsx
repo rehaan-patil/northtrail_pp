@@ -8,6 +8,9 @@ import { CurveAtlas } from './curve-atlas';
 import { ChronosPlanner } from './chronos-planner';
 import { AquaMaker } from './aqua-maker';
 import { UniverseExplorer } from './universe-explorer';
+import { PriceTicker } from './price-ticker';
+import { MLPoolPredictor } from './ml-pool-predictor';
+import { WalletEmbeddedDemo } from './wallet-embedded-demo';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -27,6 +30,8 @@ import {
   Clock,
   Anchor,
   Globe,
+  BrainCircuit,
+  Wallet as WalletIcon,
 } from 'lucide-react';
 import {
   createNorthtrail,
@@ -70,7 +75,7 @@ export default function ReviewPage() {
 
   // Active workspace tab
   const [activeTab, setActiveTab] = useState<
-    'workbench' | 'curve-atlas' | 'chronos' | 'aqua' | 'universe' | 'trail' | 'proof'
+    'workbench' | 'curve-atlas' | 'chronos' | 'aqua' | 'universe' | 'ml-pool' | 'wallet-embed' | 'trail' | 'proof'
   >('workbench');
 
   // Toggle Light / Dark Mode
@@ -203,10 +208,12 @@ export default function ReviewPage() {
   }
 
   return (
-    <div className="workspace" data-theme={theme}>
-      <a className="skip-link" href="#main">
-        Skip to review
-      </a>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }} data-theme={theme}>
+      <PriceTicker />
+      <div className="workspace">
+        <a className="skip-link" href="#main">
+          Skip to review
+        </a>
 
       {/* Modern Workspace Sidebar */}
       <aside className="sidebar">
@@ -267,6 +274,26 @@ export default function ReviewPage() {
           >
             <Globe size={17} />
             Universe Risk Lens
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${activeTab === 'ml-pool' ? 'active' : ''}`}
+            onClick={() => setActiveTab('ml-pool')}
+            style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <BrainCircuit size={17} />
+            ML Pool Intelligence
+          </button>
+
+          <button
+            type="button"
+            className={`nav-item ${activeTab === 'wallet-embed' ? 'active' : ''}`}
+            onClick={() => setActiveTab('wallet-embed')}
+            style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <WalletIcon size={17} />
+            Embedded Wallet Demo
           </button>
 
           <button
@@ -343,9 +370,13 @@ export default function ReviewPage() {
                       ? '1inch Aqua · Adaptive Maker'
                       : activeTab === 'universe'
                         ? 'Universe Risk Lens'
-                        : activeTab === 'trail'
-                          ? 'Decision Trail Evidence'
-                          : 'Trade Proof Receipt'}
+                        : activeTab === 'ml-pool'
+                          ? 'ML Liquidity Pool Intelligence'
+                          : activeTab === 'wallet-embed'
+                            ? 'Embedded Wallet Assurance Demo'
+                            : activeTab === 'trail'
+                              ? 'Decision Trail Evidence'
+                              : 'Trade Proof Receipt'}
             </strong>
           </div>
 
@@ -453,6 +484,20 @@ export default function ReviewPage() {
                 onClick={() => setActiveTab('aqua')}
               >
                 Aqua Maker <Anchor size={14} />
+              </button>
+              <button
+                type="button"
+                className={`matveyan-dashed-btn ${activeTab === 'ml-pool' ? 'selected' : ''}`}
+                onClick={() => setActiveTab('ml-pool')}
+              >
+                ML Pool Intelligence <BrainCircuit size={14} />
+              </button>
+              <button
+                type="button"
+                className={`matveyan-dashed-btn ${activeTab === 'wallet-embed' ? 'selected' : ''}`}
+                onClick={() => setActiveTab('wallet-embed')}
+              >
+                Embedded Wallet Demo <WalletIcon size={14} />
               </button>
               <span style={{ fontSize: '11.5px', color: 'var(--dim)', fontFamily: 'ui-monospace, monospace' }}>
                 Zero Custody · Local Verification
@@ -675,7 +720,13 @@ export default function ReviewPage() {
           {/* TAB 5: UNIVERSE EXPLORER */}
           {activeTab === 'universe' && <UniverseExplorer />}
 
-          {/* TAB 6: DECISION TRAIL (Cryptographic Evidence) */}
+          {/* TAB 6: ML POOL PREDICTOR */}
+          {activeTab === 'ml-pool' && <MLPoolPredictor />}
+
+          {/* TAB 7: EMBEDDED WALLET SDK DEMO */}
+          {activeTab === 'wallet-embed' && <WalletEmbeddedDemo />}
+
+          {/* TAB 8: DECISION TRAIL (Cryptographic Evidence) */}
           {(activeTab === 'trail' || activeTab === 'workbench') && (
             <section className="panel trail-panel" id="decision-trail" style={{ marginTop: '28px' }}>
               <div className="panel-heading">
@@ -825,5 +876,6 @@ export default function ReviewPage() {
         </main>
       </div>
     </div>
+  </div>
   );
 }

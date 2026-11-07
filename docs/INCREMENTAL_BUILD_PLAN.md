@@ -110,3 +110,4 @@ graph TD
 | Turbopack raw workspace imports failing | Self-contained bundling via `tsup` in `@northtrail/sdk` | **Mitigated** |
 | Unsafe financial spending | Strict non-custodial boundaries: backend never holds private keys; wallet signs all transactions | **Enforced** |
 | Fabricated quotes or ML promises | Explicit provenance tags (`PROVIDER_RESPONSE`, `SIMULATED`, `TESTED_SIMULATION`) | **Enforced** |
+
