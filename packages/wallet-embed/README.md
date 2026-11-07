@@ -41,3 +41,4 @@ const securedProvider = wrapWithNorthtrail(window.ethereum, {
 ## License
 
 Apache-2.0 © Northtrail Protocol
+

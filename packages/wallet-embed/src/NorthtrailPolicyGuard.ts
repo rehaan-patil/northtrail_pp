@@ -150,3 +150,4 @@ function computeDigest(tx: TransactionIntent): `0x${string}` {
   const hex = (hash >>> 0).toString(16).padStart(8, '0');
   return `0x${hex.repeat(8)}` as `0x${string}`;
 }
+

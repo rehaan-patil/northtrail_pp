@@ -28,3 +28,4 @@ export function createNorthtrailWagmiMiddleware(config: NorthtrailWagmiConfig = 
     return connector;
   };
 }
+
