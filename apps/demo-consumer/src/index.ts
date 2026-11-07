@@ -1,7 +1,11 @@
 import { createNorthtrail, createDecision, verifyDecision } from '@northtrail/sdk';
 
 const northtrail = createNorthtrail({
-  baseUrl: process.env.NORTHTRAIL_API_URL ?? 'http://localhost:4000',
+  baseUrl:
+    process.env.NORTHTRAIL_API_URL ??
+    (process.env.NODE_ENV === 'production'
+      ? 'https://northtrailpp-production.up.railway.app'
+      : 'https://northtrailpp-production.up.railway.app'),
 });
 
 const status = await northtrail.status();

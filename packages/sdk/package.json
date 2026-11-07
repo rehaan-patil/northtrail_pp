@@ -24,7 +24,9 @@
     "build": "tsup"
   },
   "devDependencies": {
-    "@northtrail/domain": "workspace:*"
+    "@northtrail/domain": "workspace:*",
+    "@northtrail/aqua": "workspace:*",
+    "@northtrail/compass": "workspace:*"
   },
   "dependencies": {
     "zod": "4.6.7"

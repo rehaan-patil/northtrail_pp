@@ -45,7 +45,7 @@ export function registerAgentPassRoutes(app: FastifyInstance) {
     const { challenge, proof } = Body.parse(request.body);
     return verifyWorldAgentPass(challenge, proof, consumedNullifiers, {
       isSimulation: process.env.NODE_ENV === 'test' || !process.env.WORLD_APP_ID,
-      appId: process.env.WORLD_APP_ID,
+      ...(process.env.WORLD_APP_ID ? { appId: process.env.WORLD_APP_ID } : {}),
     });
   });
 

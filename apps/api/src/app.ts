@@ -65,12 +65,17 @@ export async function buildApp(
       const expiresAt = new Date(now.getTime() + 30_000).toISOString();
       return {
         schemaVersion: '1' as const,
+        kind: 'QUOTE_OBSERVATION' as const,
+        provider: 'UNISWAP' as const,
+        provenance: 'PROVIDER_RESPONSE' as const,
+        requestId: `req-${Date.now()}`,
         quoteId: `quote-${Date.now()}`,
+        responseDigest: ('0x' + 'b'.repeat(64)) as `0x${string}`,
+        requestedAt: now.toISOString(),
         fetchedAt: now.toISOString(),
         reviewExpiresAt: expiresAt,
-        providerBlockNumber: 21_045_890,
-        provenance: 'UNISWAP_V3_DIRECT' as const,
-        responseDigest: '0x' + 'b'.repeat(64),
+        providerBlockNumber: '21045890',
+        chainVerification: 'NOT_VERIFIED' as const,
         request: input,
         outputRaw: amountOutRaw,
         policyMinOutRaw: minOutRaw,
@@ -80,7 +85,7 @@ export async function buildApp(
         routes: [
           [
             {
-              pool: '0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640' as `0x${string}`,
+              pool: '0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640' as `0x${string}`,
               tokenIn: input.tokenIn,
               tokenOut: input.tokenOut,
               feePips: 500,
@@ -115,15 +120,18 @@ export async function buildApp(
     logController: new LogController({ disableRequestLogging: true }),
   });
 
-     await app.register(helmet);
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  });
   await app.register(cors, {
     origin: (origin, cb) => {
-      // Allow localhost, 127.0.0.1, Vercel frontend, and configured origin
       if (
         !origin ||
         origin.includes('localhost') ||
         origin.includes('127.0.0.1') ||
         origin.includes('vercel.app') ||
+        origin.includes('railway.app') ||
         origin === env.APP_ORIGIN
       ) {
         return cb(null, true);
@@ -131,7 +139,8 @@ export async function buildApp(
       cb(new Error('Not allowed by CORS'), false);
     },
     credentials: false,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'Accept', 'Origin'],
   });
   await app.register(rateLimit, { max: 60, timeWindow: '1 minute' });
   app.addHook('onSend', async (_req, reply) => {

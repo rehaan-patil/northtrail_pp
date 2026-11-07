@@ -1,0 +1,15 @@
+# NORTHTRAIL 3.0 — BUG FIX LEDGER
+
+| Bug ID | Symptom | Root Cause | Changed Files | Verification Command | Status |
+|---|---|---|---|---|---|
+| **BUG-01** | `corepack pnpm -r build` failed with `ERR_PNPM_BAD_PM_VERSION` | `package.json` had `"packageManager": "pnpm@12.16.1"` while `12.18.0` was installed and invoked under corepack. | `package.json` | `corepack pnpm -r --if-present build` | **RESOLVED** |
+| **BUG-02** | `tsc --noEmit` failed with TS2345 in `integrations/world-agent-pass` | `PASS_EXPIRED`, `INVALID_ACTION_SIGNAL`, `PASS_ALREADY_CONSUMED`, `WORLD_PROOF_INVALID` were not in `ErrorCode` union in `packages/domain/src/errors.ts`. | `integrations/world-agent-pass/src/index.ts` | `corepack pnpm typecheck` | **RESOLVED** |
+| **BUG-03** | `exactOptionalPropertyTypes` TS2379 failure in `agent-pass-routes.ts` | `{ appId: process.env.WORLD_APP_ID }` passed `undefined` to optional string property. | `apps/api/src/agent-pass-routes.ts` | `corepack pnpm typecheck` | **RESOLVED** |
+| **BUG-04** | Missing `@northtrail/domain` import in `tests/world-agent-pass.test.ts` | Test used bare package import without tsconfig path mapping instead of relative path `../packages/domain/src/index.js`. | `tests/world-agent-pass.test.ts` | `corepack pnpm test` | **RESOLVED** |
+| **BUG-05** | TS2345 `fallbackQuoter` mismatch in `apps/api/src/app.ts` | Simulated quote returned number block number, missing `kind`, `provider`, `requestId`, and invalid `provenance`. | `apps/api/src/app.ts` | `corepack pnpm typecheck` | **RESOLVED** |
+| **BUG-06** | Browser CORS rejection on Vercel deployment | Fastify was configured with strict origin or hardcoded domain; browser calls from Vercel preview URLs were blocked. | `apps/api/src/app.ts` | `tests/api.test.ts` | **RESOLVED** |
+| **BUG-07** | Frontend UI completely stuck and all buttons disabled | `page.tsx` had `disabled={busy || !status}`; when Railway was sleeping or CORS blocked `status`, calculate, research, and proof buttons froze. | `apps/web/app/page.tsx` | Next.js production build & browser testing | **RESOLVED** |
+| **BUG-08** | TS2345 `accounts[0]` in `apps/web/app/quote-panel.tsx` | Under `noUncheckedIndexedAccess`, `accounts[0]` is typed as `string | undefined`. | `apps/web/app/quote-panel.tsx` | `corepack pnpm typecheck` | **RESOLVED** |
+| **BUG-09** | Turbopack module resolution error in Next.js 16 build | Next.js Turbopack could not resolve raw `.js` import specifiers in workspace packages (`packages/domain`, `packages/aqua`, `packages/compass`). | `packages/sdk/package.json`, `packages/sdk/tsup.config.ts`, `packages/sdk/src/index.ts`, `apps/web/package.json` | `corepack pnpm -r --if-present build` | **RESOLVED** |
+| **BUG-10** | Components not contributing to trader and maker flows | Advanced features in `packages/compass` (Curve Atlas, Chronos) and `packages/aqua` (Aqua Maker) were not represented in the web frontend. | `apps/web/app/curve-atlas.tsx`, `apps/web/app/chronos-planner.tsx`, `apps/web/app/aqua-maker.tsx`, `apps/web/app/universe-explorer.tsx`, `apps/web/app/page.tsx` | Interactive UI workspace test | **RESOLVED** |
+

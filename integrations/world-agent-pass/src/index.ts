@@ -81,13 +81,13 @@ export async function verifyWorldAgentPass(
 ): Promise<WorldAgentPass> {
   const now = new Date().toISOString();
   if (now > challenge.expiresAt) {
-    throw new NorthtrailError('PASS_EXPIRED', 'Challenge has expired. Request a new pass.', 400);
+    throw new NorthtrailError('EVIDENCE_EXPIRED', 'Challenge has expired. Request a new pass.', 400);
   }
 
   // 1. Strict Signal Verification
   if (proof.signal !== challenge.actionDigest) {
     throw new NorthtrailError(
-      'INVALID_ACTION_SIGNAL',
+      'INVALID_INPUT',
       'The cryptographic signal does not match the active trade challenge.',
       400,
     );
@@ -96,7 +96,7 @@ export async function verifyWorldAgentPass(
   // 2. Anti-Replay: Prevent nullifier reuse
   if (consumedNullifiers.has(proof.nullifier_hash)) {
     throw new NorthtrailError(
-      'PASS_ALREADY_CONSUMED',
+      'CONFLICT',
       'This World ID pass has already been consumed.',
       409,
     );
@@ -122,7 +122,7 @@ export async function verifyWorldAgentPass(
 
     if (!res.ok) {
       throw new NorthtrailError(
-        'WORLD_PROOF_INVALID',
+        'WORLD_UNVERIFIED',
         'Official World ID proof verification failed.',
         400,
       );
@@ -167,7 +167,7 @@ export function evaluateAgentMandate(
   // Case B: Over budget, but verified via World Agent Pass
   if (pass && pass.status === 'ACTIVE') {
     if (new Date().toISOString() > pass.expiresAt) {
-      throw new NorthtrailError('PASS_EXPIRED', 'World Agent Pass has expired.', 400);
+      throw new NorthtrailError('EVIDENCE_EXPIRED', 'World Agent Pass has expired.', 400);
     }
     // Consume pass atomically:
     pass.status = 'CONSUMED';

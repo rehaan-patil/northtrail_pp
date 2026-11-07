@@ -5,7 +5,7 @@ import {
   evaluateAgentMandate,
   registerAgentInAgentBook,
 } from '../integrations/world-agent-pass/src/index.js';
-import type { AgentMandate, MandateExceptionRequest, WorldProofPayload } from '@northtrail/domain';
+import type { AgentMandate, MandateExceptionRequest, WorldProofPayload } from '../packages/domain/src/index.js';
 
 const mockMandate: AgentMandate = {
   mandateId: 'mandate-chronos-001',

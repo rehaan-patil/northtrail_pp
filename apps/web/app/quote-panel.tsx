@@ -73,9 +73,10 @@ export function QuotePanel({
     const eth = (window as any).ethereum;
 
     const handleAccountsChanged = (accounts: string[]) => {
-      if (accounts && accounts.length > 0) {
-        setWallet(accounts[0]);
-        void fetchBalance(accounts[0]);
+      const primary = accounts?.[0];
+      if (primary) {
+        setWallet(primary);
+        void fetchBalance(primary);
       } else {
         setWallet('');
         setBalance(null);
